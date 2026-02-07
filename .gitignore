@@ -44,12 +44,11 @@ offline_dubbing.log
 *.log
 
 # Models (these should not be committed due to size)
-Models/whisper/*
-!Models/whisper/.gitkeep
-Models/nllb/*
-!Models/nllb/.gitkeep
-Models/xtts/*
-!Models/xtts/.gitkeep
+Models/**/*
+!Models/
+!Models/whisper/
+!Models/nllb/
+!Models/xtts/
 
 # User data
 *.csv

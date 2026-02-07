@@ -1,6 +1,6 @@
 # Offline Audio Dubbing
 
-A desktop application for offline audio translation with voice cloning using Whisper, NLLB, and XTTS-v2.
+A professional desktop application for offline audio translation with voice cloning using Whisper, NLLB, and XTTS-v2.
 
 ## 🚀 Features
 
@@ -13,6 +13,8 @@ A desktop application for offline audio translation with voice cloning using Whi
 - Real-time progress tracking
 - Smart model availability checking with automatic dialog skipping when all models are present
 - Intuitive processing mode selection with direct action buttons
+- Professional modular architecture with clean separation of concerns
+- Comprehensive error handling and logging
 
 ## 📋 Prerequisites
 
@@ -25,8 +27,8 @@ A desktop application for offline audio translation with voice cloning using Whi
 
 ### Step 1: Clone the Repository
 ```bash
-git clone https://github.com/yourusername/offline-audio-dubbing.git
-cd offline-audio-dubbing
+git clone https://github.com/MadhusudhanPathak/audio_dubbing
+cd audio_dubbing
 ```
 
 ### Step 2: Set Up Virtual Environment (Recommended)
@@ -52,7 +54,7 @@ If you encounter DLL errors when running the application on Windows:
 2. If PyTorch installation fails, try installing separately:
    ```bash
    pip uninstall torch torchvision torchaudio
-   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+   pip install torch>=2.6.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
    ```
 
 ## 🧰 Required Models
@@ -80,7 +82,7 @@ Before using the application, you need to download the following models:
 
 ### Narration Models (XTTS-v2)
 - **Download from:** https://huggingface.co/coqui/XTTS-v2
-- **Required files:** config.json, model.pth, vocab.json, speakers.pth, language_ids.json
+- **Required files:** config.json, model.pth, vocab.json (for newer versions)
 - **Place in:** `Models/xtts/` (either directly in the folder or in a subdirectory)
 - **Recommended:** Latest version (currently 2.0.2 or newer)
 
@@ -116,14 +118,15 @@ python main.py
 2. Text translation using NLLB (if in dubbed mode)
 3. Voice cloning and audio synthesis using XTTS-v2 (if in dubbed mode)
 
-## 📁 Project Structure
+## 📁 Professional Project Structure
 
 ```
 offline-audio-dubbing/
-├── main.py                 # Main application entry point with PyQt5 UI
+├── main.py                 # Main application entry point
 ├── requirements.txt        # Python dependencies
 ├── agent.md               # Agent configuration and architecture
 ├── README.md              # This file
+├── LICENSE                # License information
 ├── Whisper.exe            # Whisper executable (Windows)
 ├── Whisper.dll            # Whisper dependency (Windows)
 ├── Inputs/                # Input audio files directory
@@ -132,11 +135,27 @@ offline-audio-dubbing/
 │   ├── whisper/          # Whisper model files (.bin or .gguf)
 │   ├── nllb/             # NLLB model directories/files
 │   └── xtts/             # XTTS model directories/files
-└── modules/               # Core functionality modules
-    ├── transcriber.py     # Audio transcription module
-    ├── translator.py      # Text translation module
-    ├── voice_cloner.py    # Voice cloning and synthesis module
-    └── utils.py           # Utility functions and helpers
+├── src/                   # Source code root
+│   ├── __init__.py       # Package initialization
+│   ├── core/             # Core business logic
+│   │   ├── __init__.py
+│   │   ├── transcriber.py # Audio transcription module
+│   │   ├── translator.py  # Text translation module
+│   │   └── voice_cloner.py # Voice cloning module
+│   ├── ui/               # User interface components
+│   │   ├── __init__.py
+│   │   └── main_window.py # Main UI window
+│   ├── utils/            # Utility functions
+│   │   ├── __init__.py
+│   │   └── helpers.py    # Helper functions
+│   ├── config/           # Configuration module
+│   │   ├── __init__.py
+│   │   └── app_config.py # Application configuration
+│   └── models/           # Data models (if any)
+├── docs/                 # Documentation files
+├── tests/                # Unit and integration tests
+├── config/               # Configuration files
+└── scripts/              # Utility scripts
 ```
 
 ## 💾 Output Format
@@ -168,13 +187,6 @@ A: Use smaller models for faster processing. Consider using GPU if available.
 - Use distilled NLLB models for faster translation
 - Ensure sufficient RAM for model loading
 - Process shorter audio segments for faster results
-
-## 📞 Support
-
-For support, please check:
-- The troubleshooting section above
-- Open an issue on the GitHub repository
-- Ensure all models are correctly downloaded and placed in the right directories
 
 ## 🤝 Contributing
 

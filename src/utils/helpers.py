@@ -5,6 +5,7 @@ import soundfile as sf
 import pydub
 from pydub import AudioSegment
 import logging
+from src.config.app_config import get_config
 
 
 def scan_model_files(directory, extension=".pt"):
@@ -13,19 +14,39 @@ def scan_model_files(directory, extension=".pt"):
 
     Args:
         directory (str): Directory path to scan
-        extension (str): File extension to look for (default: ".pt")
+        extension (str or list): File extension(s) to look for (default: ".pt")
 
     Returns:
         list: List of model file paths
+    
+    Raises:
+        ValueError: If directory is not a string or extension is invalid
     """
+    if not directory or not isinstance(directory, str):
+        raise ValueError("Directory must be a non-empty string")
+    
+    if not extension or (not isinstance(extension, str) and not isinstance(extension, list)):
+        raise ValueError("Extension must be a string or list of strings")
+    
     if not os.path.exists(directory):
         logging.warning(f"Directory does not exist: {directory}")
         return []
 
     try:
-        pattern = os.path.join(directory, f"*{extension}")
-        files = glob.glob(pattern)
-        logging.info(f"Found {len(files)} model files in {directory} with extension {extension}")
+        # Handle multiple extensions if extension is a list
+        if isinstance(extension, list):
+            files = []
+            for ext in extension:
+                if not isinstance(ext, str):
+                    logging.warning(f"Skipping invalid extension: {ext}")
+                    continue
+                pattern = os.path.join(directory, f"*{ext}")
+                files.extend(glob.glob(pattern))
+        else:
+            pattern = os.path.join(directory, f"*{extension}")
+            files = glob.glob(pattern)
+        
+        logging.info(f"Found {len(files)} model files in {directory}")
         return files
     except Exception as e:
         logging.error(f"Error scanning directory {directory}: {str(e)}")

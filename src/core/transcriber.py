@@ -3,6 +3,7 @@ import os
 import re
 import logging
 from pathlib import Path
+from src.config.app_config import get_config
 
 
 class Transcriber:
@@ -13,16 +14,20 @@ class Transcriber:
         Args:
             model_path (str): Path to the Whisper model file (ggml format)
         """
-        self.whisper_exe = os.path.join(os.path.dirname(__file__), "..", "Whisper.exe")
+        # Use the configuration for paths
+        config = get_config()
+        self.whisper_exe = config.WHISPER_EXE_PATH
         self.model_path = model_path
-        
+
         # Validate model path exists
         if not os.path.exists(self.model_path):
             raise FileNotFoundError(f"Whisper model not found at {self.model_path}")
-        
+
         # Validate Whisper executable exists
         if not os.path.exists(self.whisper_exe):
             raise FileNotFoundError(f"Whisper.exe not found at {self.whisper_exe}")
+        
+        logging.info(f"Initialized Whisper transcriber with model: {self.model_path}")
 
     def transcribe(self, audio_path, language=None):
         """
@@ -34,23 +39,41 @@ class Transcriber:
 
         Returns:
             dict: Dictionary containing 'text' and 'language' keys
+        
+        Raises:
+            FileNotFoundError: If audio file or model is not found
+            ValueError: If audio_path is invalid
+            RuntimeError: If transcription fails
         """
+        # Validate inputs
+        if not audio_path or not isinstance(audio_path, str):
+            raise ValueError("Audio path must be a non-empty string")
+        
+        if language is not None and not isinstance(language, str):
+            raise ValueError("Language must be a string or None")
+        
         # Validate audio file exists
         if not os.path.exists(audio_path):
             raise FileNotFoundError(f"Audio file not found at {audio_path}")
-        
-        # Build command arguments
-        cmd = [self.whisper_exe, "-m", self.model_path]
+
+        # Build command arguments for whisper.cpp executable
+        cmd = [self.whisper_exe, "-m", self.model_path, "--language"]
 
         # Add language if specified
         if language and language != "auto":
-            cmd.extend(["-l", language])
+            # Extract language code from NLLB format if needed (e.g., eng_Latn -> en)
+            lang_code = language.split('_')[0][:2] if '_' in language else language[:2]
+            cmd.append(lang_code)
+        else:
+            cmd.append("auto")  # Use auto-detection if no language specified
 
-        # Add output format
-        cmd.extend(["-otxt"])  # Output as text file
+        # Add output format and suppress verbose output
+        cmd.extend(["--output-txt", "--max-len", "1"])
 
         # Add the audio file as the last argument
         cmd.append(audio_path)
+        
+        logging.info(f"Starting transcription for audio: {audio_path}, language: {language}")
 
         try:
             # Run Whisper.exe
@@ -59,7 +82,8 @@ class Transcriber:
                 cmd,
                 capture_output=True,
                 text=True,
-                check=False  # Don't raise exception on non-zero exit code
+                check=False,  # Don't raise exception on non-zero exit code
+                timeout=300  # 5 minute timeout for transcription
             )
 
             # Check if the command was successful
@@ -83,11 +107,14 @@ class Transcriber:
                     logging.info(f"Successfully read transcription from {txt_output_path}")
                 except Exception as e:
                     logging.warning(f"Could not read output file {txt_output_path}: {e}")
-            
+                    # If we can't read the file, try to extract from stdout
+                    if result.stdout:
+                        text_result = self._extract_transcription_from_stdout(result.stdout)
+
             # If no output file was created, try to extract text from stdout
             if not text_result and result.stdout:
                 text_result = self._extract_transcription_from_stdout(result.stdout)
-                
+
             # If still no text, use stderr as fallback
             if not text_result and result.stderr:
                 text_result = result.stderr.strip()
@@ -105,6 +132,9 @@ class Transcriber:
                 "language": detected_language
             }
 
+        except subprocess.TimeoutExpired:
+            logging.error("Transcription timed out after 5 minutes")
+            raise RuntimeError("Transcription timed out after 5 minutes")
         except Exception as e:
             logging.error(f"Error during transcription: {str(e)}")
             raise
