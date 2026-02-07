@@ -18,20 +18,20 @@ This is an offline audio dubbing application that performs speech-to-text transc
 Input Audio → Transcription (Whisper) → Translation (NLLB) → Voice Cloning (XTTS-v2) → Output Audio
 ```
 
-### Robustness Features Added
-1. **Comprehensive Error Handling**: Each module has specific exception handling for different error types (FileNotFoundError, ValueError, RuntimeError)
-2. **Detailed Logging System**: Full logging with file output (`offline_dubbing.log`) and console output
-3. **Input Validation**: All file paths and inputs are validated before processing
-4. **Resource Management**: Proper cleanup methods and resource handling
-5. **Progress Tracking**: Granular progress updates and status messages
-6. **Filename Sanitization**: Prevents issues with special characters in output filenames
+### Recent Enhancements
+1. **Smart Model Availability Checking**: The application now checks for required models on startup and skips the model download dialog if all models are present
+2. **Enhanced Model Detection**: Improved model checking logic that looks for required files in both main directories and subdirectories
+3. **Cleaner UI**: Removed redundant action buttons and streamlined the interface
+4. **Direct Processing**: Mode selection buttons now directly trigger processing instead of requiring a separate start button
+5. **Improved Layout**: Swapped positions of Browse buttons and file selection status, and reorganized language selection
+6. **Concise Model Names**: Dropdowns now display only model names instead of full paths
 
-### Key Enhancements
-- **Enhanced Whisper Parsing**: Better output parsing and language detection from Whisper.exe
-- **Model Validation**: Checks for model existence before loading
-- **Audio Validation**: Validates audio files before processing
-- **Directory Management**: Ensures output directories exist before file operations
-- **Graceful Degradation**: Handles missing models and files gracefully with informative messages
+### Key Features
+- **Model Download Dialog**: Modal dialog showing required model downloads with local availability check
+- **Checkbox Indicators**: Visual indication of which models are available locally
+- **Refresh Capability**: Button to recheck model availability
+- **Extension Information**: Clear specification of expected file extensions for each model type
+- **Intuitive Processing**: Direct action buttons for transcription and dubbed translation modes
 
 ## Technical Details
 
@@ -55,9 +55,9 @@ Offline Audio Dubbing/
 ├── Inputs/                # Input audio files directory
 ├── Outputs/               # Generated output files directory
 ├── Models/                # Model storage directory
-│   ├── whisper/          # Whisper model files (.bin)
-│   ├── nllb/             # NLLB model directories
-│   └── xtts/             # XTTS model directories
+│   ├── whisper/          # Whisper model files (.bin or .gguf)
+│   ├── nllb/             # NLLB model directories/files
+│   └── xtts/             # XTTS model directories/files
 ├── modules/               # Core functionality modules
 │   ├── transcriber.py     # Audio transcription module
 │   ├── translator.py      # Text translation module
@@ -96,6 +96,7 @@ Offline Audio Dubbing/
 3. **Batch Processing**: Support for processing multiple files
 4. **Advanced Audio Processing**: More sophisticated audio format handling
 5. **Model Management**: Better model versioning and updates
+6. **UI Enhancements**: Additional user experience improvements
 
 ### Integration Points
 - The application is modular and each component can be updated independently
@@ -113,17 +114,19 @@ Offline Audio Dubbing/
 
 ### Normal Operation Flow
 1. Launch main.py
-2. Select appropriate models from dropdowns
-3. Choose input audio file
-4. For voice cloning, provide reference audio (6-10 seconds)
-5. Select source and target languages
-6. Choose processing mode (transcription only or dubbed translation)
-7. Start processing and monitor progress
+2. If models are missing, model download dialog appears with availability check
+3. If all models are present, skip directly to main interface
+4. Select appropriate models from dropdowns (model names only)
+5. Choose input audio file
+6. For voice cloning, provide reference audio (6-10 seconds)
+7. Select source and target languages
+8. Choose processing mode (transcription only or dubbed translation) - clicking either button starts processing directly
+9. Monitor progress in the progress bar and log
 
 ### Error Recovery
 - Invalid inputs are caught and reported to user
-- Processing can be stopped with the Stop button
+- Processing can be stopped with internal stop mechanism
 - Errors are logged for debugging
 - Application remains responsive during processing
 
-This configuration provides a robust foundation for offline audio dubbing with comprehensive error handling, logging, and validation mechanisms.
+This configuration provides a robust foundation for offline audio dubbing with comprehensive error handling, logging, and validation mechanisms, plus enhanced user experience features.

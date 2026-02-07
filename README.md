@@ -10,8 +10,9 @@ A desktop application for offline audio translation with voice cloning using Whi
 - Support for multiple languages
 - User-friendly PyQt5 interface
 - Complete offline processing (no internet required after initial setup)
-- Batch processing capabilities
 - Real-time progress tracking
+- Smart model availability checking with automatic dialog skipping when all models are present
+- Intuitive processing mode selection with direct action buttons
 
 ## 📋 Prerequisites
 
@@ -45,7 +46,7 @@ pip install -r requirements.txt
 If you encounter DLL errors when running the application on Windows:
 
 1. Install Microsoft Visual C++ Redistributable for Visual Studio:
-   - Download from: https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-copies-downloads
+   - Download from: https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-copies-downloads
    - Install both x64 and x86 versions
 
 2. If PyTorch installation fails, try installing separately:
@@ -58,9 +59,9 @@ If you encounter DLL errors when running the application on Windows:
 
 Before using the application, you need to download the following models:
 
-### Whisper Models (for transcription)
+### Transcription Models (Whisper)
 - **Download from:** https://huggingface.co/ggerganov/whisper.cpp
-- **Supported formats:** GGML models (.bin files)
+- **Supported formats:** GGML models (.bin files) or GGUF format (.gguf files)
 - **Place in:** `Models/whisper/`
 - **Recommended models:**
   - `ggml-tiny.bin` (~75MB, fastest but least accurate)
@@ -69,16 +70,18 @@ Before using the application, you need to download the following models:
   - `ggml-medium.bin` (~1.5GB, highly accurate)
   - `ggml-large.bin` (~2.9GB, most accurate but slower)
 
-### NLLB Models (for translation)
+### Translation Models (NLLB)
 - **Download from:** https://huggingface.co/facebook/nllb-200-distilled-600M or https://huggingface.co/facebook/nllb-200-3.3B
-- **Place in:** `Models/nllb/`
+- **Required files:** config.json, pytorch_model.bin, tokenizer.json, generation_config.json
+- **Place in:** `Models/nllb/` (either directly in the folder or in a subdirectory)
 - **Recommended models:**
   - `nllb-200-distilled-600M` (~1.2GB, good speed/accuracy)
   - `nllb-200-3.3B` (~6.6GB, highest accuracy)
 
-### XTTS-v2 Models (for voice cloning)
+### Narration Models (XTTS-v2)
 - **Download from:** https://huggingface.co/coqui/XTTS-v2
-- **Place in:** `Models/xtts/`
+- **Required files:** config.json, model.pth, vocab.json, speakers.pth, language_ids.json
+- **Place in:** `Models/xtts/` (either directly in the folder or in a subdirectory)
 - **Recommended:** Latest version (currently 2.0.2 or newer)
 
 ## 🎯 Usage
@@ -90,11 +93,13 @@ python main.py
 
 ### Interface Guide
 1. **Model Selection**
-   - Select appropriate models from dropdown menus
+   - The application automatically checks for model availability
+   - If all models are present, the model download dialog is skipped
+   - Select appropriate models from dropdown menus (only model names are displayed)
    - Click "Refresh Models" to reload after downloading new models
 
 2. **Input Files**
-   - Select audio file to be processed
+   - Select audio file to be processed using the Browse button
    - For voice cloning, provide reference audio (6-10 seconds recommended)
 
 3. **Language Settings**
@@ -104,10 +109,7 @@ python main.py
 4. **Processing Mode**
    - **Transcription Only:** Generate text transcript only
    - **Dubbed Translation:** Full audio translation with voice cloning
-
-5. **Start Processing**
-   - Click "Start Processing" to begin
-   - Monitor progress in the progress bar and log
+   - Clicking either button directly starts the corresponding process
 
 ### Processing Workflow
 1. Audio transcription using Whisper
@@ -119,7 +121,6 @@ python main.py
 ```
 offline-audio-dubbing/
 ├── main.py                 # Main application entry point with PyQt5 UI
-├── minimal_test.py         # Lightweight UI test without heavy dependencies
 ├── requirements.txt        # Python dependencies
 ├── agent.md               # Agent configuration and architecture
 ├── README.md              # This file
@@ -128,9 +129,9 @@ offline-audio-dubbing/
 ├── Inputs/                # Input audio files directory
 ├── Outputs/               # Generated output files directory
 ├── Models/                # Model storage directory
-│   ├── whisper/          # Whisper model files (.bin)
-│   ├── nllb/             # NLLB model directories
-│   └── xtts/             # XTTS model directories
+│   ├── whisper/          # Whisper model files (.bin or .gguf)
+│   ├── nllb/             # NLLB model directories/files
+│   └── xtts/             # XTTS model directories/files
 └── modules/               # Core functionality modules
     ├── transcriber.py     # Audio transcription module
     ├── translator.py      # Text translation module
@@ -141,22 +142,17 @@ offline-audio-dubbing/
 ## 💾 Output Format
 
 - **Transcription Only:** `Outputs/{input_filename}_transcript.txt`
-- **Full Translation:**
-  - Audio: `Outputs/{input_filename}_{target_lang}.wav`
-  - Transcript: `Outputs/{input_filename}_{target_lang}_transcript.txt`
+- **Full Translation:** `Outputs/{input_filename}_{target_lang}.wav`
 
 ## 🔧 Troubleshooting
 
 ### Common Issues and Solutions
 
-**Q: Application crashes immediately on startup**
-A: Check that all dependencies are installed. Try running `python minimal_test.py` to verify the UI works independently.
-
-**Q: PyTorch-related errors on Windows**
-A: Install Microsoft Visual C++ Redistributables or reinstall PyTorch with CPU support.
+**Q: Model download dialog keeps appearing even when models are present**
+A: Ensure all required model files are present. The application checks for specific files in each model directory.
 
 **Q: Models not appearing in dropdown**
-A: Ensure models are placed in correct directories and filenames are correct. Click "Refresh Models".
+A: Ensure models are placed in correct directories with required files. Click "Refresh Models".
 
 **Q: Audio format not supported**
 A: Convert to supported formats: WAV, MP3, FLAC, M4A, AAC, OGG, WMA.
@@ -172,15 +168,6 @@ A: Use smaller models for faster processing. Consider using GPU if available.
 - Use distilled NLLB models for faster translation
 - Ensure sufficient RAM for model loading
 - Process shorter audio segments for faster results
-
-## 🧪 Testing UI without Dependencies
-
-If you're having trouble with heavy dependencies, test the UI with:
-```bash
-python minimal_test.py
-```
-
-This runs a simplified version without requiring PyTorch, Whisper, or TTS libraries.
 
 ## 📞 Support
 

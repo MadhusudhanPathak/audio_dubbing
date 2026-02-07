@@ -3,7 +3,7 @@ import logging
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QComboBox, QProgressBar, QTextEdit,
-    QFileDialog, QMessageBox, QDialog, QGridLayout, QGroupBox
+    QFileDialog, QMessageBox, QDialog, QGridLayout, QGroupBox, QCheckBox
 )
 from PyQt5.QtGui import QFont, QPalette, QColor
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
@@ -18,46 +18,195 @@ from modules.utils import (
 
 
 class ModelInfoDialog(QDialog):
-    """Modal dialog showing required model downloads"""
+    """Modal dialog showing required model downloads with local availability check"""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Required Model Downloads")
         self.setModal(True)
         self.init_ui()
-    
+
     def init_ui(self):
         layout = QVBoxLayout()
-        
-        info_text = """
-        <h3>Required Model Downloads:</h3>
-        <p><b>Whisper:</b> <a href='https://huggingface.co/ggerganov/whisper.cpp/tree/main'>https://huggingface.co/ggerganov/whisper.cpp/tree/main</a><br>
-        Place .bin files (ggml format) in: Models/whisper/<br>
-        Common models: ggml-tiny.bin, ggml-base.bin, ggml-small.bin, ggml-medium.bin, ggml-large.bin</p>
 
-        <p><b>NLLB:</b> <a href='https://huggingface.co/facebook/nllb-200-distilled-600M'>https://huggingface.co/facebook/nllb-200-distilled-600M</a><br>
-        Place model folder in: Models/nllb/</p>
+        # Create a grid layout for model information
+        grid_layout = QGridLayout()
 
-        <p><b>XTTS-v2:</b> <a href='https://huggingface.co/coqui/XTTS-v2'>https://huggingface.co/coqui/XTTS-v2</a><br>
-        Place model files in: Models/xtts/</p>
+        # Whisper model section
+        whisper_label = QLabel("<b>Whisper:</b>")
+        whisper_label.setTextFormat(Qt.RichText)
+        grid_layout.addWidget(whisper_label, 0, 0)
 
-        <p><i>Click OK when models are ready.</i></p>
-        """
-        
-        label = QLabel(info_text)
-        label.setTextFormat(Qt.RichText)
-        label.setOpenExternalLinks(True)
-        label.setWordWrap(True)
-        
-        layout.addWidget(label)
-        
+        whisper_info = QLabel(
+            "<a href='https://huggingface.co/ggerganov/whisper.cpp/tree/main'>https://huggingface.co/ggerganov/whisper.cpp/tree/main</a><br>"
+            "Expected extension: <b>.bin</b> (ggml format) or <b>.gguf</b> (GGUF format)<br>"
+            "Place in: <b>Models/whisper/</b><br>"
+            "Common models: ggml-tiny.bin, ggml-base.bin, ggml-small.bin, ggml-medium.bin, ggml-large.bin"
+        )
+        whisper_info.setTextFormat(Qt.RichText)
+        whisper_info.setOpenExternalLinks(True)
+        whisper_info.setWordWrap(True)
+        grid_layout.addWidget(whisper_info, 0, 1)
+
+        # Check for Whisper models
+        whisper_available = self.check_whisper_models()
+        self.whisper_checkbox = QCheckBox("Available locally")
+        self.whisper_checkbox.setChecked(whisper_available)
+        grid_layout.addWidget(self.whisper_checkbox, 0, 2)
+
+        # NLLB model section
+        nllb_label = QLabel("<b>NLLB:</b>")
+        nllb_label.setTextFormat(Qt.RichText)
+        grid_layout.addWidget(nllb_label, 1, 0)
+
+        nllb_info = QLabel(
+            "<a href='https://huggingface.co/facebook/nllb-200-distilled-600M'>https://huggingface.co/facebook/nllb-200-distilled-600M</a><br>"
+            "Expected: <b>model directories</b> containing config.json, pytorch_model.bin, tokenizer.json, generation_config.json<br>"
+            "Place in: <b>Models/nllb/</b>"
+        )
+        nllb_info.setTextFormat(Qt.RichText)
+        nllb_info.setOpenExternalLinks(True)
+        nllb_info.setWordWrap(True)
+        grid_layout.addWidget(nllb_info, 1, 1)
+
+        # Check for NLLB models
+        nllb_available = self.check_nllb_models()
+        self.nllb_checkbox = QCheckBox("Available locally")
+        self.nllb_checkbox.setChecked(nllb_available)
+        grid_layout.addWidget(self.nllb_checkbox, 1, 2)
+
+        # XTTS-v2 model section
+        xtts_label = QLabel("<b>XTTS-v2:</b>")
+        xtts_label.setTextFormat(Qt.RichText)
+        grid_layout.addWidget(xtts_label, 2, 0)
+
+        xtts_info = QLabel(
+            "<a href='https://huggingface.co/coqui/XTTS-v2'>https://huggingface.co/coqui/XTTS-v2</a><br>"
+            "Expected: <b>model directories</b> containing config.json, model.pth, vocab.json, speakers.pth, language_ids.json<br>"
+            "Place in: <b>Models/xtts/</b>"
+        )
+        xtts_info.setTextFormat(Qt.RichText)
+        xtts_info.setOpenExternalLinks(True)
+        xtts_info.setWordWrap(True)
+        grid_layout.addWidget(xtts_info, 2, 1)
+
+        # Check for XTTS models
+        xtts_available = self.check_xtts_models()
+        self.xtts_checkbox = QCheckBox("Available locally")
+        self.xtts_checkbox.setChecked(xtts_available)
+        grid_layout.addWidget(self.xtts_checkbox, 2, 2)
+
+        layout.addLayout(grid_layout)
+
+        # Refresh button to recheck model availability
+        refresh_button = QPushButton("Refresh Model Status")
+        refresh_button.clicked.connect(self.refresh_model_status)
+        layout.addWidget(refresh_button)
+
+        # Instructions
+        instructions = QLabel(
+            "<p><i>Check the boxes above if models are available locally.</i></p>"
+            "<p><i>Click OK when models are ready.</i></p>"
+        )
+        instructions.setTextFormat(Qt.RichText)
+        layout.addWidget(instructions)
+
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         ok_button = QPushButton("OK")
         ok_button.clicked.connect(self.accept)
         button_layout.addWidget(ok_button)
-        
+
         layout.addLayout(button_layout)
         self.setLayout(layout)
+
+    def check_whisper_models(self):
+        """Check if Whisper models are available locally"""
+        whisper_dir = "./Models/whisper"
+        if os.path.exists(whisper_dir):
+            # Look for common Whisper model extensions in the whisper directory
+            whisper_extensions = ['.bin', '.gguf']
+            for file in os.listdir(whisper_dir):
+                if any(file.lower().endswith(ext) for ext in whisper_extensions):
+                    return True
+        return False
+
+    def check_nllb_models(self):
+        """Check if NLLB models are available locally"""
+        nllb_dir = "./Models/nllb"
+        if os.path.exists(nllb_dir):
+            # First check if required files exist directly in the nllb directory
+            nllb_required_files = ['config.json', 'pytorch_model.bin', 'tokenizer.json', 'generation_config.json']
+            direct_files_count = 0
+            for required_file in nllb_required_files:
+                if os.path.exists(os.path.join(nllb_dir, required_file)):
+                    direct_files_count += 1
+            # If at least 1 of the key required files exist directly in the directory, consider it valid
+            # pytorch_model.bin is the most important file for NLLB
+            if direct_files_count >= 1 and os.path.exists(os.path.join(nllb_dir, 'pytorch_model.bin')):
+                return True
+            # Or if at least 2 of the required files exist directly in the directory, consider it valid
+            elif direct_files_count >= 2:
+                return True
+            
+            # Also check for directories in the nllb directory that contain model files
+            for item in os.listdir(nllb_dir):
+                item_path = os.path.join(nllb_dir, item)
+                if os.path.isdir(item_path):
+                    # Check if directory contains common NLLB model files
+                    model_files_count = 0
+                    for required_file in nllb_required_files:
+                        if os.path.exists(os.path.join(item_path, required_file)):
+                            model_files_count += 1
+                    # If at least 1 of the key required files exist in the subdirectory, consider it valid
+                    # pytorch_model.bin is the most important file for NLLB
+                    if model_files_count >= 1 and os.path.exists(os.path.join(item_path, 'pytorch_model.bin')):
+                        return True
+                    # Or if at least 2 of the required files exist, consider it a valid model
+                    elif model_files_count >= 2:
+                        return True
+        return False
+
+    def check_xtts_models(self):
+        """Check if XTTS models are available locally"""
+        xtts_dir = "./Models/xtts"
+        if os.path.exists(xtts_dir):
+            # First check if required files exist directly in the xtts directory
+            xtts_required_files = ['config.json', 'model.pth', 'vocab.json', 'speakers.pth', 'language_ids.json']
+            direct_files_count = 0
+            for required_file in xtts_required_files:
+                if os.path.exists(os.path.join(xtts_dir, required_file)):
+                    direct_files_count += 1
+            # If at least 1 of the key required files exist directly in the directory, consider it valid
+            # model.pth is the most important file for XTTS
+            if direct_files_count >= 1 and os.path.exists(os.path.join(xtts_dir, 'model.pth')):
+                return True
+            # Or if at least 2 of the required files exist directly in the directory, consider it valid
+            elif direct_files_count >= 2:
+                return True
+            
+            # Also check for directories in the xtts directory that contain model files
+            for item in os.listdir(xtts_dir):
+                item_path = os.path.join(xtts_dir, item)
+                if os.path.isdir(item_path):
+                    # Check if directory contains common XTTS model files
+                    model_files_count = 0
+                    for required_file in xtts_required_files:
+                        if os.path.exists(os.path.join(item_path, required_file)):
+                            model_files_count += 1
+                    # If at least 1 of the key required files exist in the subdirectory, consider it valid
+                    # model.pth is the most important file for XTTS
+                    if model_files_count >= 1 and os.path.exists(os.path.join(item_path, 'model.pth')):
+                        return True
+                    # Or if at least 2 of the required files exist, consider it a valid model
+                    elif model_files_count >= 2:
+                        return True
+        return False
+
+    def refresh_model_status(self):
+        """Refresh the status of all model availability checks"""
+        self.whisper_checkbox.setChecked(self.check_whisper_models())
+        self.nllb_checkbox.setChecked(self.check_nllb_models())
+        self.xtts_checkbox.setChecked(self.check_xtts_models())
 
 
 class MainWindow(QMainWindow):
@@ -94,8 +243,9 @@ class MainWindow(QMainWindow):
         # Initialize UI components
         self.init_ui()
 
-        # Show model info dialog on startup
-        self.show_model_info_dialog()
+        # Check if all models are available and conditionally show model info dialog
+        if not self.all_models_available():
+            self.show_model_info_dialog()
     
     def center_window(self):
         """Center the window on the screen"""
@@ -103,7 +253,90 @@ class MainWindow(QMainWindow):
         cp = self.screen().availableGeometry().center()
         qr.moveCenter(cp)
         self.move(qr.topLeft())
-    
+
+    def all_models_available(self):
+        """Check if all required models are available locally"""
+        # Check for Whisper models
+        whisper_available = False
+        whisper_dir = "./Models/whisper"
+        if os.path.exists(whisper_dir):
+            # Look for common Whisper model extensions in the whisper directory
+            whisper_extensions = ['.bin', '.gguf']
+            for file in os.listdir(whisper_dir):
+                if any(file.lower().endswith(ext) for ext in whisper_extensions):
+                    whisper_available = True
+                    break
+
+        # Check for NLLB models
+        nllb_available = False
+        nllb_dir = "./Models/nllb"
+        if os.path.exists(nllb_dir):
+            # First check if required files exist directly in the nllb directory
+            nllb_required_files = ['config.json', 'pytorch_model.bin', 'tokenizer.json', 'generation_config.json']
+            direct_files_count = 0
+            for required_file in nllb_required_files:
+                if os.path.exists(os.path.join(nllb_dir, required_file)):
+                    direct_files_count += 1
+            # If pytorch_model.bin is present or at least 2 required files exist, consider it valid
+            if direct_files_count >= 1 and os.path.exists(os.path.join(nllb_dir, 'pytorch_model.bin')):
+                nllb_available = True
+            elif direct_files_count >= 2:
+                nllb_available = True
+            
+            # Also check for directories in the nllb directory that contain model files
+            if not nllb_available:
+                for item in os.listdir(nllb_dir):
+                    item_path = os.path.join(nllb_dir, item)
+                    if os.path.isdir(item_path):
+                        # Check if directory contains common NLLB model files
+                        model_files_count = 0
+                        for required_file in nllb_required_files:
+                            if os.path.exists(os.path.join(item_path, required_file)):
+                                model_files_count += 1
+                        # If pytorch_model.bin is present or at least 2 required files exist, consider it valid
+                        if model_files_count >= 1 and os.path.exists(os.path.join(item_path, 'pytorch_model.bin')):
+                            nllb_available = True
+                            break
+                        elif model_files_count >= 2:
+                            nllb_available = True
+                            break
+
+        # Check for XTTS models
+        xtts_available = False
+        xtts_dir = "./Models/xtts"
+        if os.path.exists(xtts_dir):
+            # First check if required files exist directly in the xtts directory
+            xtts_required_files = ['config.json', 'model.pth', 'vocab.json', 'speakers.pth', 'language_ids.json']
+            direct_files_count = 0
+            for required_file in xtts_required_files:
+                if os.path.exists(os.path.join(xtts_dir, required_file)):
+                    direct_files_count += 1
+            # If model.pth is present or at least 2 required files exist, consider it valid
+            if direct_files_count >= 1 and os.path.exists(os.path.join(xtts_dir, 'model.pth')):
+                xtts_available = True
+            elif direct_files_count >= 2:
+                xtts_available = True
+            
+            # Also check for directories in the xtts directory that contain model files
+            if not xtts_available:
+                for item in os.listdir(xtts_dir):
+                    item_path = os.path.join(xtts_dir, item)
+                    if os.path.isdir(item_path):
+                        # Check if directory contains common XTTS model files
+                        model_files_count = 0
+                        for required_file in xtts_required_files:
+                            if os.path.exists(os.path.join(item_path, required_file)):
+                                model_files_count += 1
+                        # If model.pth is present or at least 2 required files exist, consider it valid
+                        if model_files_count >= 1 and os.path.exists(os.path.join(item_path, 'model.pth')):
+                            xtts_available = True
+                            break
+                        elif model_files_count >= 2:
+                            xtts_available = True
+                            break
+
+        return whisper_available and nllb_available and xtts_available
+
     def show_model_info_dialog(self):
         """Show the model info dialog"""
         dialog = ModelInfoDialog(self)
@@ -122,36 +355,36 @@ class MainWindow(QMainWindow):
         model_group = QGroupBox("Model Selection")
         model_layout = QGridLayout()
         
-        # Whisper model selection
-        whisper_label = QLabel("Whisper Model:")
-        whisper_label.setToolTip("Select the Whisper model for speech recognition")
+        # Transcription model selection (formerly Whisper)
+        transcription_label = QLabel("Transcription Model:")
+        transcription_label.setToolTip("Select the model for speech recognition")
         self.whisper_combo = QComboBox()
-        self.whisper_combo.setToolTip("Choose a Whisper model for transcription")
+        self.whisper_combo.setToolTip("Choose a model for transcription")
         self.refresh_whisper_models()
-        
+
         refresh_models_btn = QPushButton("Refresh Models")
         refresh_models_btn.setToolTip("Scan for newly added model files")
         refresh_models_btn.clicked.connect(self.refresh_all_models)
-        
-        model_layout.addWidget(whisper_label, 0, 0)
+
+        model_layout.addWidget(transcription_label, 0, 0)
         model_layout.addWidget(self.whisper_combo, 0, 1)
-        
-        # NLLB model selection
-        nllb_label = QLabel("NLLB Model:")
-        nllb_label.setToolTip("Select the NLLB model for translation")
+
+        # Translation model selection (formerly NLLB)
+        translation_label = QLabel("Translation Model:")
+        translation_label.setToolTip("Select the model for translation")
         self.nllb_combo = QComboBox()
-        self.nllb_combo.setToolTip("Choose an NLLB model for language translation")
+        self.nllb_combo.setToolTip("Choose a model for language translation")
         self.refresh_nllb_models()
-        model_layout.addWidget(nllb_label, 1, 0)
+        model_layout.addWidget(translation_label, 1, 0)
         model_layout.addWidget(self.nllb_combo, 1, 1)
-        
-        # XTTS model selection
-        xtts_label = QLabel("XTTS Model:")
-        xtts_label.setToolTip("Select the XTTS model for voice cloning")
+
+        # Narration model selection (formerly XTTS)
+        narration_label = QLabel("Narration Model:")
+        narration_label.setToolTip("Select the model for voice synthesis")
         self.xtts_combo = QComboBox()
-        self.xtts_combo.setToolTip("Choose an XTTS model for voice synthesis")
+        self.xtts_combo.setToolTip("Choose a model for voice synthesis")
         self.refresh_xtts_models()
-        model_layout.addWidget(xtts_label, 2, 0)
+        model_layout.addWidget(narration_label, 2, 0)
         model_layout.addWidget(self.xtts_combo, 2, 1)
         
         model_layout.addWidget(refresh_models_btn, 3, 0, 1, 2, Qt.AlignRight)
@@ -162,76 +395,82 @@ class MainWindow(QMainWindow):
         # Input Section
         input_group = QGroupBox("Input Files")
         input_layout = QGridLayout()
-        
+
         # Audio file selection
         audio_label = QLabel("Audio File:")
         audio_label.setToolTip("Select the audio file to be processed")
-        self.audio_input = QLabel("(No file selected)")
-        self.audio_input.setToolTip("Current selected audio file for processing")
         audio_btn = QPushButton("Browse...")
         audio_btn.setToolTip("Select an audio file to process")
         audio_btn.clicked.connect(self.select_audio_file)
-        
+        self.audio_input = QLabel("(No file selected)")
+        self.audio_input.setToolTip("Current selected audio file for processing")
+
         input_layout.addWidget(audio_label, 0, 0)
-        input_layout.addWidget(self.audio_input, 0, 1)
-        input_layout.addWidget(audio_btn, 0, 2)
-        
+        input_layout.addWidget(audio_btn, 0, 1)
+        input_layout.addWidget(self.audio_input, 0, 2)
+
         # Reference audio selection
         ref_label = QLabel("Reference Audio:")
         ref_label.setToolTip("Select a reference audio file for voice cloning (6-10 seconds recommended)")
-        self.ref_input = QLabel("(No file selected)")
-        self.ref_input.setToolTip("Current selected reference audio for voice cloning")
         ref_btn = QPushButton("Browse...")
         ref_btn.setToolTip("Select a reference audio file for voice cloning")
         ref_btn.clicked.connect(self.select_ref_audio_file)
-        
+        self.ref_input = QLabel("(No file selected)")
+        self.ref_input.setToolTip("Current selected reference audio for voice cloning")
+
         input_layout.addWidget(ref_label, 1, 0)
-        input_layout.addWidget(self.ref_input, 1, 1)
-        input_layout.addWidget(ref_btn, 1, 2)
-        
-        # Source language
+        input_layout.addWidget(ref_btn, 1, 1)
+        input_layout.addWidget(self.ref_input, 1, 2)
+
+        # Source language selection
         src_lang_label = QLabel("Source Language:")
         src_lang_label.setToolTip("Select the language of the input audio or choose auto-detect")
         self.src_lang_combo = QComboBox()
         self.populate_language_combo(self.src_lang_combo)
         self.src_lang_combo.addItem("Auto-detect", "auto")
         self.src_lang_combo.setToolTip("Choose the source language or detect automatically")
+        
         input_layout.addWidget(src_lang_label, 2, 0)
         input_layout.addWidget(self.src_lang_combo, 2, 1, 1, 2)
-        
-        # Target language
+
+        # Target language selection
         tgt_lang_label = QLabel("Target Language(s):")
         tgt_lang_label.setToolTip("Select the language(s) to translate the audio to")
         self.tgt_lang_combo = QComboBox()
         self.tgt_lang_combo.setToolTip("Choose the target language for translation")
         self.populate_language_combo(self.tgt_lang_combo)
+        
         input_layout.addWidget(tgt_lang_label, 3, 0)
         input_layout.addWidget(self.tgt_lang_combo, 3, 1, 1, 2)
-        
+
         input_group.setLayout(input_layout)
         main_layout.addWidget(input_group)
-        
-        # Mode Selection
+
+        # Mode Selection - now triggers processing directly
         mode_group = QGroupBox("Processing Mode")
         mode_layout = QHBoxLayout()
-        
+
         self.transcription_only_btn = QPushButton("Transcription Only")
-        self.transcription_only_btn.setCheckable(True)
+        self.transcription_only_btn.setCheckable(False)  # No longer checkable, just a trigger
         self.transcription_only_btn.setToolTip("Generate only the text transcription of the audio")
+        self.transcription_only_btn.clicked.connect(lambda: self.start_processing(transcription_only=True))
+
         self.dubbed_translation_btn = QPushButton("Dubbed Translation")
-        self.dubbed_translation_btn.setCheckable(True)
+        self.dubbed_translation_btn.setCheckable(False)  # No longer checkable, just a trigger
         self.dubbed_translation_btn.setToolTip("Translate the audio and generate dubbed speech with cloned voice")
-        self.dubbed_translation_btn.setChecked(True)  # Default selection
         
+        # Connect the dubbed translation button to start processing with transcription_only=False
+        self.dubbed_translation_btn.clicked.connect(lambda: self.start_processing(transcription_only=False))
+
         mode_layout.addWidget(self.transcription_only_btn)
         mode_layout.addWidget(self.dubbed_translation_btn)
         mode_group.setLayout(mode_layout)
         main_layout.addWidget(mode_group)
-        
+
         # Progress Section
         progress_group = QGroupBox("Progress")
         progress_layout = QVBoxLayout()
-        
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setToolTip("Shows the progress of the audio processing")
         self.status_label = QLabel("Ready to process")
@@ -240,37 +479,13 @@ class MainWindow(QMainWindow):
         self.log_area.setMaximumHeight(150)
         self.log_area.setReadOnly(True)
         self.log_area.setToolTip("Log of processing events and messages")
-        
+
         progress_layout.addWidget(self.progress_bar)
         progress_layout.addWidget(self.status_label)
         progress_layout.addWidget(self.log_area)
-        
+
         progress_group.setLayout(progress_layout)
         main_layout.addWidget(progress_group)
-        
-        # Action Buttons
-        action_layout = QHBoxLayout()
-        
-        self.start_btn = QPushButton("Start Processing")
-        self.start_btn.setStyleSheet("background-color: #008080; color: white;")
-        self.start_btn.setToolTip("Begin processing the selected audio file")
-        self.start_btn.clicked.connect(self.start_processing)
-        
-        self.stop_btn = QPushButton("Stop")
-        self.stop_btn.setEnabled(False)
-        self.stop_btn.setToolTip("Stop the current processing operation")
-        self.stop_btn.clicked.connect(self.stop_processing)
-        
-        self.clear_log_btn = QPushButton("Clear Log")
-        self.clear_log_btn.setToolTip("Clear the log messages")
-        self.clear_log_btn.clicked.connect(self.clear_log)
-        
-        action_layout.addWidget(self.start_btn)
-        action_layout.addWidget(self.stop_btn)
-        action_layout.addWidget(self.clear_log_btn)
-        action_layout.addStretch()
-        
-        main_layout.addLayout(action_layout)
         
         central_widget.setLayout(main_layout)
         
@@ -311,7 +526,8 @@ class MainWindow(QMainWindow):
             self.whisper_combo.clear()
             models = scan_model_files("./Models/whisper", ".bin")  # Changed from .pt to .bin for ggml models
             for model in models:
-                self.whisper_combo.addItem(os.path.basename(model), model)
+                model_name = os.path.basename(model)
+                self.whisper_combo.addItem(model_name, model)
 
             if self.whisper_combo.count() == 0:
                 self.whisper_combo.addItem("No models found", "")
@@ -328,21 +544,46 @@ class MainWindow(QMainWindow):
         """Refresh NLLB model dropdown"""
         try:
             self.nllb_combo.clear()
-            # Look for directories in Models/nllb/
             nllb_dir = "./Models/nllb"
+            
+            # Check if the main NLLB directory itself contains model files
+            nllb_main_valid = False
             if os.path.exists(nllb_dir):
+                nllb_required_files = ['config.json', 'pytorch_model.bin', 'tokenizer.json', 'generation_config.json']
+                direct_files_count = 0
+                for required_file in nllb_required_files:
+                    if os.path.exists(os.path.join(nllb_dir, required_file)):
+                        direct_files_count += 1
+                
+                # If pytorch_model.bin is present or at least 2 required files exist, consider main directory as valid
+                if direct_files_count >= 1 and os.path.exists(os.path.join(nllb_dir, 'pytorch_model.bin')):
+                    self.nllb_combo.addItem("NLLB Model", nllb_dir)
+                    nllb_main_valid = True
+                elif direct_files_count >= 2:
+                    self.nllb_combo.addItem("NLLB Model", nllb_dir)
+                    nllb_main_valid = True
+                
+                # Also look for subdirectories that contain model files
                 for item in os.listdir(nllb_dir):
                     item_path = os.path.join(nllb_dir, item)
                     if os.path.isdir(item_path):
-                        self.nllb_combo.addItem(item, item_path)
-            else:
-                logging.warning("NLLB models directory does not exist")
-
+                        # Check if directory contains common NLLB model files
+                        model_files_count = 0
+                        for required_file in nllb_required_files:
+                            if os.path.exists(os.path.join(item_path, required_file)):
+                                model_files_count += 1
+                        
+                        # If pytorch_model.bin is present or at least 2 required files exist, add to combo
+                        if model_files_count >= 1 and os.path.exists(os.path.join(item_path, 'pytorch_model.bin')):
+                            self.nllb_combo.addItem(item, item_path)
+                        elif model_files_count >= 2:
+                            self.nllb_combo.addItem(item, item_path)
+            
             if self.nllb_combo.count() == 0:
                 self.nllb_combo.addItem("No models found", "")
                 logging.warning("No NLLB models found in Models/nllb directory")
             else:
-                logging.info(f"Loaded NLLB models from {nllb_dir}")
+                logging.info(f"Loaded {self.nllb_combo.count()} NLLB model(s) from {nllb_dir}")
         except Exception as e:
             logging.error(f"Error refreshing NLLB models: {str(e)}")
             self.nllb_combo.clear()
@@ -353,21 +594,46 @@ class MainWindow(QMainWindow):
         """Refresh XTTS model dropdown"""
         try:
             self.xtts_combo.clear()
-            # Look for directories in Models/xtts/
             xtts_dir = "./Models/xtts"
+            
+            # Check if the main XTTS directory itself contains model files
+            xtts_main_valid = False
             if os.path.exists(xtts_dir):
+                xtts_required_files = ['config.json', 'model.pth', 'vocab.json', 'speakers.pth', 'language_ids.json']
+                direct_files_count = 0
+                for required_file in xtts_required_files:
+                    if os.path.exists(os.path.join(xtts_dir, required_file)):
+                        direct_files_count += 1
+                
+                # If model.pth is present or at least 2 required files exist, consider main directory as valid
+                if direct_files_count >= 1 and os.path.exists(os.path.join(xtts_dir, 'model.pth')):
+                    self.xtts_combo.addItem("XTTS Model", xtts_dir)
+                    xtts_main_valid = True
+                elif direct_files_count >= 2:
+                    self.xtts_combo.addItem("XTTS Model", xtts_dir)
+                    xtts_main_valid = True
+                
+                # Also look for subdirectories that contain model files
                 for item in os.listdir(xtts_dir):
                     item_path = os.path.join(xtts_dir, item)
                     if os.path.isdir(item_path):
-                        self.xtts_combo.addItem(item, item_path)
-            else:
-                logging.warning("XTTS models directory does not exist")
-
+                        # Check if directory contains common XTTS model files
+                        model_files_count = 0
+                        for required_file in xtts_required_files:
+                            if os.path.exists(os.path.join(item_path, required_file)):
+                                model_files_count += 1
+                        
+                        # If model.pth is present or at least 2 required files exist, add to combo
+                        if model_files_count >= 1 and os.path.exists(os.path.join(item_path, 'model.pth')):
+                            self.xtts_combo.addItem(item, item_path)
+                        elif model_files_count >= 2:
+                            self.xtts_combo.addItem(item, item_path)
+            
             if self.xtts_combo.count() == 0:
                 self.xtts_combo.addItem("No models found", "")
                 logging.warning("No XTTS models found in Models/xtts directory")
             else:
-                logging.info(f"Loaded XTTS models from {xtts_dir}")
+                logging.info(f"Loaded {self.xtts_combo.count()} XTTS model(s) from {xtts_dir}")
         except Exception as e:
             logging.error(f"Error refreshing XTTS models: {str(e)}")
             self.xtts_combo.clear()
@@ -402,64 +668,76 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.warning(self, "Invalid Reference Audio", msg)
     
-    def start_processing(self):
+    def start_processing(self, transcription_only=False):
         """Start the audio processing"""
         # Validate inputs
-        if not self.validate_inputs():
+        if not self.validate_inputs(transcription_only):
             return
-        
-        # Disable start button and enable stop button
-        self.start_btn.setEnabled(False)
-        self.stop_btn.setEnabled(True)
-        
+
         # Start processing in a separate thread
         self.processing_thread = ProcessingThread(
             self.audio_file_path,
-            self.ref_audio_path if self.dubbed_translation_btn.isChecked() else None,
+            self.ref_audio_path if not transcription_only else None,
             self.whisper_combo.currentData(),
             self.nllb_combo.currentData(),
             self.xtts_combo.currentData(),
             self.src_lang_combo.currentData(),
             self.tgt_lang_combo.currentData(),
-            self.transcription_only_btn.isChecked()
+            transcription_only
         )
-        
+
         # Connect signals
         self.processing_thread.progress_updated.connect(self.update_progress)
         self.processing_thread.status_updated.connect(self.update_status)
         self.processing_thread.log_updated.connect(self.log_message)
         self.processing_thread.processing_finished.connect(self.on_processing_finished)
-        
+
         # Start the thread
         self.processing_thread.start()
     
-    def stop_processing(self):
-        """Stop the audio processing"""
-        if self.processing_thread and self.processing_thread.isRunning():
-            self.processing_thread.stop()
-            self.log_message("Processing stopped by user.")
-    
-    def validate_inputs(self):
+    def validate_inputs(self, transcription_only=False):
         """Validate all input fields"""
         errors = []
 
         try:
             # Check if models are selected
             if self.whisper_combo.currentData() == "":
-                errors.append("Please select a Whisper model")
+                errors.append("Please select a Transcription model")
             elif not os.path.exists(self.whisper_combo.currentData()):
-                errors.append("Selected Whisper model file does not exist")
-                
-            if self.nllb_combo.currentData() == "":
-                errors.append("Please select an NLLB model")
-            elif not os.path.exists(self.nllb_combo.currentData()):
-                errors.append("Selected NLLB model directory does not exist")
-                
-            if self.xtts_combo.currentData() == "" and self.dubbed_translation_btn.isChecked():
-                errors.append("Please select an XTTS model")
-            elif self.xtts_combo.currentData() != "" and self.dubbed_translation_btn.isChecked():
-                if not os.path.exists(self.xtts_combo.currentData()):
-                    errors.append("Selected XTTS model directory does not exist")
+                errors.append("Selected Transcription model file does not exist")
+
+            if not transcription_only:
+                if self.nllb_combo.currentData() == "":
+                    errors.append("Please select a Translation model")
+                elif not os.path.exists(self.nllb_combo.currentData()):
+                    errors.append("Selected Translation model directory does not exist")
+                else:
+                    # Validate that the selected NLLB directory has required model files
+                    nllb_required_files = ['config.json', 'pytorch_model.bin', 'tokenizer.json', 'generation_config.json']
+                    required_found = 0
+                    for required_file in nllb_required_files:
+                        if os.path.exists(os.path.join(self.nllb_combo.currentData(), required_file)):
+                            required_found += 1
+
+                    # Check if pytorch_model.bin exists (key file) or at least 2 required files exist
+                    if required_found < 1 or (required_found < 2 and not os.path.exists(os.path.join(self.nllb_combo.currentData(), 'pytorch_model.bin'))):
+                        errors.append("Selected Translation model directory is missing required model files (config.json, pytorch_model.bin, etc.)")
+
+                if self.xtts_combo.currentData() == "":
+                    errors.append("Please select a Narration model")
+                elif not os.path.exists(self.xtts_combo.currentData()):
+                    errors.append("Selected Narration model directory does not exist")
+                else:
+                    # Validate that the selected XTTS directory has required model files
+                    xtts_required_files = ['config.json', 'model.pth', 'vocab.json', 'speakers.pth', 'language_ids.json']
+                    required_found = 0
+                    for required_file in xtts_required_files:
+                        if os.path.exists(os.path.join(self.xtts_combo.currentData(), required_file)):
+                            required_found += 1
+
+                    # Check if model.pth exists (key file) or at least 2 required files exist
+                    if required_found < 1 or (required_found < 2 and not os.path.exists(os.path.join(self.xtts_combo.currentData(), 'model.pth'))):
+                        errors.append("Selected Narration model directory is missing required model files (config.json, model.pth, etc.)")
 
             # Check if audio file is selected
             if not self.audio_file_path:
@@ -470,7 +748,7 @@ class MainWindow(QMainWindow):
                 errors.append("Selected audio file is invalid")
 
             # Check if reference audio is valid when in dubbed translation mode
-            if self.dubbed_translation_btn.isChecked():
+            if not transcription_only:
                 if not self.ref_audio_path:
                     errors.append("Please select a reference audio file for voice cloning")
                 elif not os.path.exists(self.ref_audio_path):
@@ -507,16 +785,13 @@ class MainWindow(QMainWindow):
     def log_message(self, message):
         """Add a message to the log area"""
         self.log_area.append(message)
-    
-    def clear_log(self):
-        """Clear the log area"""
-        self.log_area.clear()
-    
+
     def on_processing_finished(self, success, message):
         """Handle processing completion"""
-        self.start_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        
+        # Re-enable the mode buttons after processing is complete
+        self.transcription_only_btn.setEnabled(True)
+        self.dubbed_translation_btn.setEnabled(True)
+
         if success:
             QMessageBox.information(self, "Success", message)
         else:
