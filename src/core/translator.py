@@ -142,32 +142,32 @@ class Translator:
                         lang_code_mapping = {}
                         # Common NLLB language codes
                         common_lang_codes = [
-                            'ace_Arab', 'ace_Latn', 'ady_Cyrl', 'aeb_Arab', 'afr_Latn', 'ajp_Arab', 'aka_Latn', 
-                            'amh_Ethi', 'apc_Arab', 'arb_Arab', 'ars_Arab', 'ary_Arab', 'arz_Arab', 'asm_Beng', 
-                            'ast_Latn', 'awa_Deva', 'ayr_Latn', 'azb_Arab', 'aze_Latn', 'bak_Cyrl', 'bam_Latn', 
-                            'ban_Latn', 'bel_Cyrl', 'bem_Latn', 'ben_Beng', 'bho_Deva', 'bjn_Arab', 'bjn_Latn', 
-                            'bod_Tibt', 'bos_Latn', 'bug_Latn', 'bul_Cyrl', 'cat_Latn', 'ceb_Latn', 'ces_Latn', 
-                            'cjk_Latn', 'ckb_Arab', 'crh_Latn', 'cym_Latn', 'dan_Latn', 'deu_Latn', 'dik_Latn', 
-                            'dyu_Latn', 'dzo_Tibt', 'ell_Grek', 'eng_Latn', 'epo_Latn', 'est_Latn', 'eus_Latn', 
-                            'ewe_Latn', 'fao_Latn', 'fij_Latn', 'fin_Latn', 'fon_Latn', 'fra_Latn', 'fur_Latn', 
-                            'fuv_Latn', 'gla_Latn', 'gle_Latn', 'glg_Latn', 'grn_Latn', 'guj_Gujr', 'hat_Latn', 
-                            'hau_Latn', 'heb_Hebr', 'hin_Deva', 'hne_Deva', 'hrv_Latn', 'hun_Latn', 'hye_Armn', 
-                            'ibo_Latn', 'ilo_Latn', 'ind_Latn', 'isl_Latn', 'ita_Latn', 'jav_Latn', 'jpn_Jpan', 
-                            'kab_Latn', 'kac_Latn', 'kam_Latn', 'kan_Knda', 'kas_Arab', 'kas_Deva', 'kat_Geor', 
-                            'kaz_Cyrl', 'kbp_Latn', 'kea_Latn', 'khm_Khmr', 'kik_Latn', 'kin_Latn', 'kir_Cyrl', 
-                            'kmb_Latn', 'kmr_Latn', 'knc_Arab', 'knc_Latn', 'kon_Latn', 'kor_Hang', 'lao_Laoo', 
-                            'lij_Latn', 'lim_Latn', 'lin_Latn', 'lit_Latn', 'lmo_Latn', 'ltg_Latn', 'ltz_Latn', 
-                            'lua_Latn', 'lug_Latn', 'luo_Latn', 'lus_Latn', 'lvs_Latn', 'mag_Deva', 'mai_Deva', 
-                            'mal_Mlym', 'mar_Deva', 'min_Arab', 'min_Latn', 'mkd_Cyrl', 'mlt_Latn', 'mni_Beng', 
-                            'mos_Latn', 'mri_Latn', 'mya_Mymr', 'nld_Latn', 'nno_Latn', 'nob_Latn', 'npi_Deva', 
-                            'nso_Latn', 'nus_Latn', 'nya_Latn', 'oci_Latn', 'ory_Orya', 'pag_Latn', 'pan_Guru', 
-                            'pap_Latn', 'pol_Latn', 'por_Latn', 'prs_Arab', 'pus_Arab', 'ron_Latn', 'run_Latn', 
-                            'rus_Cyrl', 'sag_Latn', 'san_Deva', 'sat_Olck', 'scn_Latn', 'shn_Mymr', 'sin_Sinh', 
-                            'slk_Latn', 'slv_Latn', 'smo_Latn', 'sna_Latn', 'snd_Arab', 'som_Latn', 'sot_Latn', 
-                            'spa_Latn', 'sqi_Latn', 'srd_Latn', 'srp_Cyrl', 'srp_Latn', 'ssw_Latn', 'sun_Latn', 
-                            'swe_Latn', 'swh_Latn', 'szl_Latn', 'tam_Taml', 'taq_Latn', 'taq_Tfng', 'tat_Cyrl', 
-                            'tel_Telu', 'tgk_Cyrl', 'tgl_Latn', 'tha_Thai', 'tur_Latn', 'twi_Latn', 'tzm_Tfng', 
-                            'uig_Arab', 'ukr_Cyrl', 'umb_Latn', 'urd_Arab', 'uzb_Latn', 'vec_Latn', 'vie_Latn', 
+                            'ace_Arab', 'ace_Latn', 'ady_Cyrl', 'aeb_Arab', 'afr_Latn', 'ajp_Arab', 'aka_Latn',
+                            'amh_Ethi', 'apc_Arab', 'arb_Arab', 'ars_Arab', 'ary_Arab', 'arz_Arab', 'asm_Beng',
+                            'ast_Latn', 'awa_Deva', 'ayr_Latn', 'azb_Arab', 'aze_Latn', 'bak_Cyrl', 'bam_Latn',
+                            'ban_Latn', 'bel_Cyrl', 'bem_Latn', 'ben_Beng', 'bho_Deva', 'bjn_Arab', 'bjn_Latn',
+                            'bod_Tibt', 'bos_Latn', 'bug_Latn', 'bul_Cyrl', 'cat_Latn', 'ceb_Latn', 'ces_Latn',
+                            'cjk_Latn', 'ckb_Arab', 'crh_Latn', 'cym_Latn', 'dan_Latn', 'deu_Latn', 'dik_Latn',
+                            'dyu_Latn', 'dzo_Tibt', 'ell_Grek', 'eng_Latn', 'epo_Latn', 'est_Latn', 'eus_Latn',
+                            'ewe_Latn', 'fao_Latn', 'fij_Latn', 'fin_Latn', 'fon_Latn', 'fra_Latn', 'fur_Latn',
+                            'fuv_Latn', 'gla_Latn', 'gle_Latn', 'glg_Latn', 'grn_Latn', 'guj_Gujr', 'hat_Latn',
+                            'hau_Latn', 'heb_Hebr', 'hin_Deva', 'hne_Deva', 'hrv_Latn', 'hun_Latn', 'hye_Armn',
+                            'ibo_Latn', 'ilo_Latn', 'ind_Latn', 'isl_Latn', 'ita_Latn', 'jav_Latn', 'jpn_Jpan',
+                            'kab_Latn', 'kac_Latn', 'kam_Latn', 'kan_Knda', 'kas_Arab', 'kas_Deva', 'kat_Geor',
+                            'kaz_Cyrl', 'kbp_Latn', 'kea_Latn', 'khm_Khmr', 'kik_Latn', 'kin_Latn', 'kir_Cyrl',
+                            'kmb_Latn', 'kmr_Latn', 'knc_Arab', 'knc_Latn', 'kon_Latn', 'kor_Hang', 'lao_Laoo',
+                            'lij_Latn', 'lim_Latn', 'lin_Latn', 'lit_Latn', 'lmo_Latn', 'ltg_Latn', 'ltz_Latn',
+                            'lua_Latn', 'lug_Latn', 'luo_Latn', 'lus_Latn', 'lvs_Latn', 'mag_Deva', 'mai_Deva',
+                            'mal_Mlym', 'mar_Deva', 'min_Arab', 'min_Latn', 'mkd_Cyrl', 'mlt_Latn', 'mni_Beng',
+                            'mos_Latn', 'mri_Latn', 'mya_Mymr', 'nld_Latn', 'nno_Latn', 'nob_Latn', 'npi_Deva',
+                            'nso_Latn', 'nus_Latn', 'nya_Latn', 'oci_Latn', 'ory_Orya', 'pag_Latn', 'pan_Guru',
+                            'pap_Latn', 'pol_Latn', 'por_Latn', 'prs_Arab', 'pus_Arab', 'ron_Latn', 'run_Latn',
+                            'rus_Cyrl', 'sag_Latn', 'san_Deva', 'sat_Olck', 'scn_Latn', 'shn_Mymr', 'sin_Sinh',
+                            'slk_Latn', 'slv_Latn', 'smo_Latn', 'sna_Latn', 'snd_Arab', 'som_Latn', 'sot_Latn',
+                            'spa_Latn', 'sqi_Latn', 'srd_Latn', 'srp_Cyrl', 'srp_Latn', 'ssw_Latn', 'sun_Latn',
+                            'swe_Latn', 'swh_Latn', 'szl_Latn', 'tam_Taml', 'taq_Latn', 'taq_Tfng', 'tat_Cyrl',
+                            'tel_Telu', 'tgk_Cyrl', 'tgl_Latn', 'tha_Thai', 'tur_Latn', 'twi_Latn', 'tzm_Tfng',
+                            'uig_Arab', 'ukr_Cyrl', 'umb_Latn', 'urd_Arab', 'uzb_Latn', 'vec_Latn', 'vie_Latn',
                             'war_Latn', 'wol_Latn', 'xho_Latn', 'ydd_Hebr', 'yor_Latn', 'yue_Hant', 'zho_Hans', 'zho_Hant', 'zsm_Latn', 'zul_Latn'
                         ]
                         lang_code_mapping = {lang: idx for idx, lang in enumerate(common_lang_codes)}
@@ -184,7 +184,7 @@ class Translator:
 
         try:
             logging.info(f"Starting translation from {src_lang} to {tgt_lang}")
-            
+
             # Handle empty text case
             if not text.strip():
                 logging.warning("Empty text provided for translation, returning empty string")
@@ -194,36 +194,38 @@ class Translator:
             # The correct way is to use the tokenizer with src_lang and tgt_lang parameters
             # But if that fails, we'll use the language ID mapping in the generation step
             try:
-                # Try the standard approach first
+                # Try the standard approach first - use the tokenizer with language codes
                 inputs = self.tokenizer(
                     text,
                     src_lang=src_lang,
                     tgt_lang=tgt_lang,
-                    return_tensors="pt", 
-                    padding=True, 
-                    truncation=True, 
+                    return_tensors="pt",
+                    padding=True,
+                    truncation=True,
                     max_length=512
                 ).to(self.device)
-                
+
                 # If this works, proceed with generation
                 with torch.no_grad():
                     outputs = self.model.generate(
                         **inputs,
-                        max_length=min(len(text) * 2, 512),
+                        max_length=1024,  # Increase max length for output
                         num_beams=5,
+                        length_penalty=1.0,  # Adjust length penalty
                         early_stopping=True,
                         no_repeat_ngram_size=3,
                         temperature=0.7,
                         top_p=0.9,
                         do_sample=True
                     )
-            except TypeError:
+            except Exception as e:
+                logging.warning(f"Standard approach failed: {e}. Trying alternative approach...")
                 # If the tokenizer doesn't support src_lang/tgt_lang, use the language ID mapping approach
                 inputs = self.tokenizer(
                     text,
-                    return_tensors="pt", 
-                    padding=True, 
-                    truncation=True, 
+                    return_tensors="pt",
+                    padding=True,
+                    truncation=True,
                     max_length=512
                 ).to(self.device)
 
@@ -232,8 +234,9 @@ class Translator:
                     with torch.no_grad():
                         outputs = self.model.generate(
                             **inputs,
-                            max_length=min(len(text) * 2, 512),  # Adaptive max length based on input
+                            max_length=1024,  # Increase max length for output
                             num_beams=5,
+                            length_penalty=1.0,  # Adjust length penalty
                             early_stopping=True,
                             decoder_start_token_id=self.tokenizer.convert_tokens_to_ids(tgt_lang),  # Use the token ID for target language
                             no_repeat_ngram_size=3,
@@ -241,13 +244,15 @@ class Translator:
                             top_p=0.9,
                             do_sample=True  # Enable sampling for better translations
                         )
-                except:
+                except Exception as e2:
+                    logging.warning(f"Token-based approach failed: {e2}. Using ID-based approach...")
                     # If convert_tokens_to_ids fails, use the lang_code_mapping as fallback
                     with torch.no_grad():
                         outputs = self.model.generate(
                             **inputs,
-                            max_length=min(len(text) * 2, 512),  # Adaptive max length based on input
+                            max_length=1024,  # Increase max length for output
                             num_beams=5,
+                            length_penalty=1.0,  # Adjust length penalty
                             early_stopping=True,
                             decoder_start_token_id=lang_code_mapping[tgt_lang],  # Use the target language ID for decoder start
                             no_repeat_ngram_size=3,

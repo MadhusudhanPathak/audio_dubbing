@@ -910,27 +910,121 @@ class ProcessingThread(QThread):
                 self.processing_finished.emit(False, "Processing stopped by user")
                 return
 
-            self.status_updated.emit("Translating text...")
-            self.log_updated.emit("Starting translation...")
+            # Create timestamped filenames for all three output files
+            sanitized_name = sanitize_filename(os.path.splitext(os.path.basename(self.audio_file))[0])
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Define output paths for the three files
+            transcription_output_path = f"./Outputs/{sanitized_name}_transcription_{timestamp}.txt"
+            translation_output_path = f"./Outputs/{sanitized_name}_translation_{timestamp}.txt"
+            audio_output_path = f"./Outputs/{sanitized_name}_dubbed_{self.tgt_lang}_{timestamp}.wav"
+
+            # Save transcription text to file first
+            self.log_updated.emit(f"Saving transcription to: {transcription_output_path}")
+            with open(transcription_output_path, 'w', encoding='utf-8') as f:
+                f.write(transcribed_text)
+            self.log_updated.emit(f"Transcription saved to: {transcription_output_path}")
             self.progress_updated.emit(50)
-
-            # Translate text
-            self.log_updated.emit(f"Translating from {detected_language} to {self.tgt_lang}")
-            logging.debug(f"Source language: {detected_language}, Target language: {self.tgt_lang}")
-            translated_text = translator.translate(transcribed_text, detected_language, self.tgt_lang)
-
-            self.log_updated.emit("Translation completed")
-            logging.debug(f"Translated text length: {len(translated_text)} characters")
-            self.progress_updated.emit(70)
 
             if self._stop_flag:
                 logging.info("Processing stopped by user")
                 self.processing_finished.emit(False, "Processing stopped by user")
                 return
 
+            self.status_updated.emit("Loading NLLB translator...")
+            self.log_updated.emit("Loading NLLB model...")
+            self.progress_updated.emit(60)
+
+            # Initialize translator
+            self.log_updated.emit(f"Initializing NLLB model: {self.nllb_model}")
+            logging.debug(f"NLLB model path: {self.nllb_model}")
+            translator = Translator(self.nllb_model)
+
+            if self._stop_flag:
+                logging.info("Processing stopped by user")
+                self.processing_finished.emit(False, "Processing stopped by user")
+                return
+
+            self.status_updated.emit("Translating text...")
+            self.log_updated.emit("Starting translation...")
+            self.progress_updated.emit(70)
+
+            # Read the transcription from the saved file to use for translation
+            with open(transcription_output_path, 'r', encoding='utf-8') as f:
+                raw_transcription = f.read()
+            
+            # Clean up the transcription text by extracting just the spoken content
+            # The transcription file contains timestamps and text in format: [time --> time] text
+            lines = raw_transcription.split('\n')
+            text_parts = []
+            seen_words = set()  # Track seen words to avoid duplicates
+            
+            for line in lines:
+                line = line.strip()
+                # Look for lines with timestamp format [00:00:00.000 --> 00:00:00.000] text
+                if '-->' in line and '] ' in line:
+                    # Split on '] ' to separate timestamp from text
+                    parts = line.split('] ', 1)
+                    if len(parts) > 1:
+                        text_part = parts[1].strip()
+                        if text_part and not text_part.startswith('['):
+                            # Only add if it's actual text, not just punctuation
+                            if len(text_part) > 1 or text_part.strip() in '.!?':
+                                # Split into individual words to check for duplicates
+                                words = text_part.split()
+                                unique_words = []
+                                for word in words:
+                                    word_lower = word.lower()
+                                    if word_lower not in seen_words:
+                                        unique_words.append(word)
+                                        seen_words.add(word_lower)
+                                
+                                if unique_words:
+                                    unique_text = ' '.join(unique_words)
+                                    text_parts.append(unique_text)
+            
+            # Join all text parts to form a coherent paragraph
+            # The Whisper output has each word on a separate line, so we need to reconstruct sentences
+            cleaned_transcription = ' '.join(text_parts).strip()
+            
+            # Remove extra spaces and clean up
+            import re
+            cleaned_transcription = re.sub(r'\s+', ' ', cleaned_transcription)
+            cleaned_transcription = cleaned_transcription.strip()
+            
+            # If the cleaned text is empty, use the raw transcription as fallback
+            if not cleaned_transcription:
+                cleaned_transcription = raw_transcription
+            
+            self.log_updated.emit(f"Cleaned transcription text length: {len(cleaned_transcription)} characters")
+            
+            # Translate the cleaned text from the saved transcription file
+            # Map the detected language to NLLB format if needed
+            src_lang_for_nllb = map_language_code(detected_language, to_nllb_format=True)
+            tgt_lang_for_nllb = map_language_code(self.tgt_lang, to_nllb_format=True)  # Ensure target language is in NLLB format
+            
+            self.log_updated.emit(f"Translating from {src_lang_for_nllb} to {tgt_lang_for_nllb}")
+            logging.debug(f"Source language: {src_lang_for_nllb}, Target language: {tgt_lang_for_nllb}")
+            translated_text = translator.translate(cleaned_transcription, src_lang_for_nllb, tgt_lang_for_nllb)
+
+            self.log_updated.emit("Translation completed")
+            logging.debug(f"Translated text length: {len(translated_text)} characters")
+            self.progress_updated.emit(80)
+
+            if self._stop_flag:
+                logging.info("Processing stopped by user")
+                self.processing_finished.emit(False, "Processing stopped by user")
+                return
+
+            # Save translation text to file
+            self.log_updated.emit(f"Saving translation to: {translation_output_path}")
+            with open(translation_output_path, 'w', encoding='utf-8') as f:
+                f.write(translated_text)
+            self.log_updated.emit(f"Translation saved to: {translation_output_path}")
+
             self.status_updated.emit("Loading XTTS voice cloner...")
             self.log_updated.emit("Loading XTTS model...")
-            self.progress_updated.emit(80)
+            self.progress_updated.emit(90)
 
             # Initialize voice cloner
             self.log_updated.emit(f"Initializing XTTS model: {self.xtts_model}")
@@ -944,34 +1038,16 @@ class ProcessingThread(QThread):
 
             self.status_updated.emit("Generating dubbed audio...")
             self.log_updated.emit("Generating audio with cloned voice...")
-            self.progress_updated.emit(90)
+            self.progress_updated.emit(95)
 
-            # Generate audio with cloned voice
-            # Create timestamped filenames for all three output files
-            sanitized_name = sanitize_filename(os.path.splitext(os.path.basename(self.audio_file))[0])
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            # Define output paths for the three files
-            transcription_output_path = f"./Outputs/{sanitized_name}_transcription_{timestamp}.txt"
-            translation_output_path = f"./Outputs/{sanitized_name}_translation_{timestamp}.txt"
-            audio_output_path = f"./Outputs/{sanitized_name}_dubbed_{self.tgt_lang}_{timestamp}.wav"
+            # Read the translation from the saved file to use for dubbing
+            with open(translation_output_path, 'r', encoding='utf-8') as f:
+                translation_text = f.read()
 
-            # Save transcription text to file
-            self.log_updated.emit(f"Saving transcription to: {transcription_output_path}")
-            with open(transcription_output_path, 'w', encoding='utf-8') as f:
-                f.write(transcribed_text)
-            self.log_updated.emit(f"Transcription saved to: {transcription_output_path}")
-
-            # Save translation text to file
-            self.log_updated.emit(f"Saving translation to: {translation_output_path}")
-            with open(translation_output_path, 'w', encoding='utf-8') as f:
-                f.write(translated_text)
-            self.log_updated.emit(f"Translation saved to: {translation_output_path}")
-
-            # Generate and save dubbed audio
+            # Generate and save dubbed audio using the saved translation file
             self.log_updated.emit(f"Generating dubbed audio: {audio_output_path}")
             logging.debug(f"Reference audio: {self.ref_audio}, Output path: {audio_output_path}, Language: {self.tgt_lang.split('_')[0]}")
-            cloner.clone_voice(translated_text, self.ref_audio, audio_output_path, self.tgt_lang.split('_')[0])
+            cloner.clone_voice(translation_text, self.ref_audio, audio_output_path, self.tgt_lang.split('_')[0])
 
             self.log_updated.emit(f"Dubbed audio saved to: {audio_output_path}")
             self.status_updated.emit("Processing completed successfully!")
