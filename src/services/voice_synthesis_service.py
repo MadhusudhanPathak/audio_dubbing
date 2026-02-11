@@ -4,24 +4,33 @@ import torchaudio
 import logging
 import os
 from pathlib import Path
-from src.config.app_config import get_config
+from typing import Union
+from src.common.app_config import get_config
+
+
+class VoiceSynthesisError(Exception):
+    """Custom exception for voice synthesis-related errors."""
+    pass
 
 
 class VoiceCloner:
-    def __init__(self, model_path):
+    def __init__(self, model_path: str):
         """
         Initialize the XTTS-v2 voice cloner with the specified model.
 
         Args:
             model_path (str): Path to the XTTS-v2 model directory
+        
+        Raises:
+            VoiceSynthesisError: If initialization fails
         """
         # Validate inputs
         if not model_path or not isinstance(model_path, str):
-            raise ValueError("Model path must be a non-empty string")
-        
+            raise VoiceSynthesisError("Model path must be a non-empty string")
+
         # Validate model path exists
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"XTTS model not found at {model_path}")
+            raise VoiceSynthesisError(f"XTTS model not found at {model_path}")
 
         # Check if required model files exist
         # For newer XTTS models (v2.0+), the required files are different
@@ -123,7 +132,7 @@ class VoiceCloner:
             logging.error("- Version mismatch between TTS library and model")
             raise
 
-    def clone_voice(self, text, reference_audio, output_path, language):
+    def clone_voice(self, text: str, reference_audio: str, output_path: str, language: str):
         """
         Generate audio with cloned voice from the reference audio.
 
@@ -132,16 +141,19 @@ class VoiceCloner:
             reference_audio (str): Path to reference audio file for voice cloning
             output_path (str): Path to save the generated audio
             language (str): Language code for synthesis (e.g., 'en', 'es', 'fr')
+        
+        Raises:
+            VoiceSynthesisError: If voice cloning fails
         """
         # Validate inputs
         if not text or not isinstance(text, str):
-            raise ValueError("Text must be a non-empty string")
+            raise VoiceSynthesisError("Text must be a non-empty string")
 
         if not os.path.exists(reference_audio):
-            raise FileNotFoundError(f"Reference audio not found at {reference_audio}")
+            raise VoiceSynthesisError(f"Reference audio not found at {reference_audio}")
 
         if not language or not isinstance(language, str):
-            raise ValueError("Language must be a non-empty string")
+            raise VoiceSynthesisError("Language must be a non-empty string")
 
         # Ensure output directory exists
         output_dir = os.path.dirname(output_path)
@@ -177,28 +189,53 @@ class VoiceCloner:
 
         except torch.cuda.OutOfMemoryError:
             logging.error("CUDA out of memory during voice cloning. Try using a shorter reference audio or a smaller input text.")
-            raise RuntimeError("CUDA out of memory during voice cloning. Try using a shorter reference audio.")
+            raise VoiceSynthesisError("CUDA out of memory during voice cloning. Try using a shorter reference audio.")
         except Exception as e:
             logging.error(f"Error during voice cloning: {str(e)}")
-            raise
+            raise VoiceSynthesisError(f"Voice cloning failed: {str(e)}")
 
     def _convert_to_xtts_language(self, language_code):
         """
         Convert language code to XTTS format (2-letter ISO codes).
-        
+
         Args:
             language_code (str): Input language code (e.g., 'ita_Latn', 'ita', 'it')
-            
+
         Returns:
             str: XTTS-compatible 2-letter language code
         """
         # If it's already a 2-letter code that XTTS supports, return as is
         xtts_supported = ['en', 'es', 'fr', 'de', 'it', 'pt', 'pl', 'tr', 'ru', 'nl', 'cs', 'ar', 'zh-cn', 'hu', 'ko', 'ja', 'hi']
-        
-        # Extract the base language code (first 2 letters)
-        if len(language_code) >= 2:
-            base_code = language_code[:2].lower()
+
+        # If it's in the NLLB format like 'eng_Latn', extract the base language code
+        if '_' in language_code:
+            base_code = language_code.split('_')[0].lower()
             
+            # Special handling for common NLLB codes
+            nllb_to_xtts = {
+                'eng': 'en',      # English
+                'spa': 'es',      # Spanish
+                'fra': 'fr',      # French
+                'deu': 'de',      # German
+                'ita': 'it',      # Italian
+                'por': 'pt',      # Portuguese
+                'rus': 'ru',      # Russian
+                'zho': 'zh-cn',   # Chinese
+                'jpn': 'ja',      # Japanese
+                'kor': 'ko',      # Korean
+                'ara': 'ar',      # Arabic
+                'hin': 'hi',      # Hindi
+            }
+            
+            if base_code in nllb_to_xtts:
+                xtts_code = nllb_to_xtts[base_code]
+                if xtts_code in xtts_supported:
+                    return xtts_code
+        
+        # Extract the base language code (first 2-3 letters)
+        if len(language_code) >= 2:
+            base_code = language_code[:3].lower() if len(language_code) >= 3 else language_code[:2].lower()
+
             # Handle special cases
             if language_code.lower().startswith('zh'):
                 base_code = 'zh-cn'  # Chinese simplified
@@ -208,11 +245,11 @@ class VoiceCloner:
                 base_code = 'ko'     # Korean
             elif language_code.lower().startswith('hi'):
                 base_code = 'hi'     # Hindi
-            
+
             # Check if the base code is supported
             if base_code in xtts_supported:
                 return base_code
-        
+
         # If the 2-letter code isn't supported, try to map common variations
         language_mapping = {
             'ita': 'it',      # Italian
@@ -228,13 +265,13 @@ class VoiceCloner:
             'hin': 'hi',      # Hindi
             'zho': 'zh-cn',   # Chinese
         }
-        
+
         # Check if the full code is in our mapping
         if language_code.lower() in language_mapping:
             mapped_code = language_mapping[language_code.lower()]
             if mapped_code in xtts_supported:
                 return mapped_code
-        
+
         # If it's in the format like 'ita_Latn', extract the first part
         if '_' in language_code:
             base_part = language_code.split('_')[0].lower()
@@ -244,7 +281,7 @@ class VoiceCloner:
                     return mapped_code
             elif base_part in xtts_supported:
                 return base_part
-        
+
         # If we still can't determine, default to English
         logging.warning(f"Language code '{language_code}' not supported by XTTS, defaulting to 'en'")
         return 'en'

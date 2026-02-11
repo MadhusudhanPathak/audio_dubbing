@@ -15,6 +15,10 @@ A professional desktop application for offline audio translation with voice clon
 - Intuitive processing mode selection with direct action buttons
 - Professional modular architecture with clean separation of concerns
 - Comprehensive error handling and logging
+- Type-safe implementations with proper validation
+- Clean separation of business logic, UI, and utilities
+- Improved application orchestration with dedicated workflow management
+- Enhanced data models for better structure and maintainability
 
 ## 📋 Prerequisites
 
@@ -137,31 +141,32 @@ offline-audio-dubbing/
 │   └── xtts/             # XTTS model directories/files
 ├── src/                   # Source code root
 │   ├── __init__.py       # Package initialization
-│   ├── core/             # Core business logic
+│   ├── application/      # Application orchestration layer
 │   │   ├── __init__.py
-│   │   ├── transcriber.py # Audio transcription module
-│   │   ├── translator.py  # Text translation module
-│   │   └── voice_cloner.py # Voice cloning module
-│   ├── ui/               # User interface components
+│   │   └── audio_orchestrator.py # Workflow management
+│   ├── data_models/      # Data structures and models
 │   │   ├── __init__.py
-│   │   └── main_window.py # Main UI window
-│   ├── utils/            # Utility functions
+│   │   └── audio_models.py # Data classes for audio processing
+│   ├── services/         # Business logic and service implementations
 │   │   ├── __init__.py
-│   │   └── helpers.py    # Helper functions
-│   ├── config/           # Configuration module
+│   │   ├── transcription_service.py # Audio transcription service
+│   │   ├── translation_service.py   # Text translation service
+│   │   └── voice_synthesis_service.py # Voice synthesis service
+│   ├── interfaces/       # User interfaces and API endpoints
 │   │   ├── __init__.py
+│   │   └── gui_interface.py # Main GUI interface
+│   ├── common/           # Shared utilities and configuration
+│   │   ├── __init__.py
+│   │   ├── helpers.py    # Helper functions
 │   │   └── app_config.py # Application configuration
-│   └── models/           # Data models (if any)
-├── docs/                 # Documentation files
-├── tests/                # Unit and integration tests
-├── config/               # Configuration files
-└── scripts/              # Utility scripts
+└── tests/                # Unit and integration tests
 ```
 
 ## 💾 Output Format
 
-- **Transcription Only:** `Outputs/{input_filename}_transcript.txt`
-- **Full Translation:** `Outputs/{input_filename}_{target_lang}.wav`
+- **Transcription Only:** `Outputs/{input_filename}_transcript_{timestamp}.txt`
+- **Translation Text:** `Outputs/{input_filename}_translation_{language}_{timestamp}.txt`
+- **Dubbed Audio:** `Outputs/{input_filename}_dubbed_{language}_{timestamp}.wav`
 
 ## 🔧 Troubleshooting
 

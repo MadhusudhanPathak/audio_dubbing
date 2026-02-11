@@ -3,33 +3,44 @@ import os
 import re
 import logging
 from pathlib import Path
-from src.config.app_config import get_config
+from typing import Union, Tuple
+from src.common.app_config import get_config
+
+
+class TranscriptionError(Exception):
+    """Custom exception for transcription-related errors."""
+    pass
 
 
 class Transcriber:
-    def __init__(self, model_path):
+    def __init__(self, model_path: str):
         """
         Initialize the Whisper transcriber with the specified model.
 
         Args:
             model_path (str): Path to the Whisper model file (ggml format)
+        
+        Raises:
+            TranscriptionError: If initialization fails
         """
         # Use the configuration for paths
         config = get_config()
         self.whisper_exe = config.WHISPER_EXE_PATH
         self.model_path = model_path
 
-        # Validate model path exists
-        if not os.path.exists(self.model_path):
-            raise FileNotFoundError(f"Whisper model not found at {self.model_path}")
-
-        # Validate Whisper executable exists
-        if not os.path.exists(self.whisper_exe):
-            raise FileNotFoundError(f"Whisper.exe not found at {self.whisper_exe}")
+        # Validate inputs
+        if not model_path or not isinstance(model_path, str):
+            raise TranscriptionError("Model path must be a non-empty string")
         
+        if not os.path.exists(self.model_path):
+            raise TranscriptionError(f"Whisper model not found at {self.model_path}")
+
+        if not os.path.exists(self.whisper_exe):
+            raise TranscriptionError(f"Whisper.exe not found at {self.whisper_exe}")
+
         logging.info(f"Initialized Whisper transcriber with model: {self.model_path}")
 
-    def transcribe(self, audio_path, language=None):
+    def transcribe(self, audio_path: str, language: str = None) -> dict:
         """
         Transcribe audio to text using the Whisper.exe.
 
@@ -39,22 +50,20 @@ class Transcriber:
 
         Returns:
             dict: Dictionary containing 'text' and 'language' keys
-        
+
         Raises:
-            FileNotFoundError: If audio file or model is not found
-            ValueError: If audio_path is invalid
-            RuntimeError: If transcription fails
+            TranscriptionError: If transcription fails
         """
         # Validate inputs
         if not audio_path or not isinstance(audio_path, str):
-            raise ValueError("Audio path must be a non-empty string")
-        
+            raise TranscriptionError("Audio path must be a non-empty string")
+
         if language is not None and not isinstance(language, str):
-            raise ValueError("Language must be a string or None")
-        
+            raise TranscriptionError("Language must be a string or None")
+
         # Validate audio file exists
         if not os.path.exists(audio_path):
-            raise FileNotFoundError(f"Audio file not found at {audio_path}")
+            raise TranscriptionError(f"Audio file not found at {audio_path}")
 
         # Build command arguments for whisper.cpp executable
         cmd = [self.whisper_exe, "-m", self.model_path, "--language"]
@@ -134,10 +143,10 @@ class Transcriber:
 
         except subprocess.TimeoutExpired:
             logging.error("Transcription timed out after 5 minutes")
-            raise RuntimeError("Transcription timed out after 5 minutes")
+            raise TranscriptionError("Transcription timed out after 5 minutes")
         except Exception as e:
             logging.error(f"Error during transcription: {str(e)}")
-            raise
+            raise TranscriptionError(f"Transcription failed: {str(e)}")
 
     def _extract_transcription_from_stdout(self, stdout_text):
         """

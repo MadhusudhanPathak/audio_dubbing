@@ -1,12 +1,5 @@
 """
-Offline Audio Dubbing - Professional Package Structure
+Offline Audio Dubbing - Main Package
 
-This package contains all modules for the Offline Audio Dubbing application.
+This package contains all modules for the offline audio dubbing application.
 """
-from .core import *
-from .ui import *
-from .utils import *
-
-__version__ = "1.0.0"
-__author__ = "Offline Audio Dubbing Team"
-__all__ = ['core', 'ui', 'utils']

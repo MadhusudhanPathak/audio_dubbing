@@ -5,7 +5,7 @@ import soundfile as sf
 import pydub
 from pydub import AudioSegment
 import logging
-from src.config.app_config import get_config
+from src.common.app_config import get_config
 
 
 def scan_model_files(directory, extension=".pt"):

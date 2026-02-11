@@ -3,7 +3,8 @@ import logging
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QComboBox, QProgressBar, QTextEdit,
-    QFileDialog, QMessageBox, QDialog, QGridLayout, QGroupBox, QCheckBox
+    QFileDialog, QMessageBox, QDialog, QGridLayout, QGroupBox, QCheckBox,
+    QScrollArea
 )
 from PyQt5.QtGui import QFont, QPalette, QColor
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
@@ -12,14 +13,14 @@ from datetime import datetime
 # Add the project root to the path to allow imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from src.core.transcriber import Transcriber
-from src.core.translator import Translator
-from src.core.voice_cloner import VoiceCloner
-from src.utils.helpers import (
+from src.services.transcription_service import Transcriber
+from src.services.translation_service import Translator
+from src.services.voice_synthesis_service import VoiceCloner
+from src.common.helpers import (
     scan_model_files, validate_audio_file, validate_reference_audio_duration,
     map_language_code, ensure_directory_exists, get_supported_audio_formats, sanitize_filename
 )
-from src.config.app_config import get_config
+from src.common.app_config import get_config
 
 
 class ModelInfoDialog(QDialog):
@@ -441,12 +442,22 @@ class MainWindow(QMainWindow):
         # Target language selection
         tgt_lang_label = QLabel("Target Language(s):")
         tgt_lang_label.setToolTip("Select the language(s) to translate the audio to")
-        self.tgt_lang_combo = QComboBox()
-        self.tgt_lang_combo.setToolTip("Choose the target language for translation")
-        self.populate_language_combo(self.tgt_lang_combo)
+        
+        # Create a scroll area for multiple language checkboxes
+        self.tgt_lang_scroll = QScrollArea()
+        self.tgt_lang_widget = QWidget()
+        self.tgt_lang_layout = QVBoxLayout()
+        self.tgt_lang_widget.setLayout(self.tgt_lang_layout)
+        self.tgt_lang_scroll.setWidget(self.tgt_lang_widget)
+        self.tgt_lang_scroll.setWidgetResizable(True)
+        self.tgt_lang_scroll.setMaximumHeight(100)  # Limit height for better UI
+        
+        # Populate language checkboxes
+        self.target_language_checkboxes = []
+        self.populate_language_checkboxes()
         
         input_layout.addWidget(tgt_lang_label, 3, 0)
-        input_layout.addWidget(self.tgt_lang_combo, 3, 1, 1, 2)
+        input_layout.addWidget(self.tgt_lang_scroll, 3, 1, 1, 2)
 
         input_group.setLayout(input_layout)
         main_layout.addWidget(input_group)
@@ -513,11 +524,34 @@ class MainWindow(QMainWindow):
             ("Japanese", "jpn_Jpan"),
             ("Korean", "kor_Hang"),
             ("Arabic", "ara_Arab"),
-            ("Hindi", "hin_Deva")
+            ("Hindi", "hin_Deva")  # Added Hindi
         ]
-        
+
         for name, code in languages:
             combo.addItem(name, code)
+
+    def populate_language_checkboxes(self):
+        """Populate language checkboxes with common languages"""
+        languages = [
+            ("English", "eng_Latn"),
+            ("Spanish", "spa_Latn"),
+            ("French", "fra_Latn"),
+            ("German", "deu_Latn"),
+            ("Italian", "ita_Latn"),
+            ("Portuguese", "por_Latn"),
+            ("Russian", "rus_Cyrl"),
+            ("Chinese", "zho_Hans"),
+            ("Japanese", "jpn_Jpan"),
+            ("Korean", "kor_Hang"),
+            ("Arabic", "ara_Arab"),
+            ("Hindi", "hin_Deva")  # Added Hindi
+        ]
+
+        for name, code in languages:
+            checkbox = QCheckBox(name)
+            checkbox.setObjectName(code)  # Store the language code as object name
+            self.tgt_lang_layout.addWidget(checkbox)
+            self.target_language_checkboxes.append(checkbox)
     
     def refresh_all_models(self):
         """Refresh all model dropdowns"""
@@ -685,6 +719,9 @@ class MainWindow(QMainWindow):
         if not self.validate_inputs(transcription_only):
             return
 
+        # Get selected target languages
+        selected_target_languages = self.get_selected_target_languages()
+
         # Start processing in a separate thread
         self.processing_thread = ProcessingThread(
             self.audio_file_path,
@@ -693,7 +730,7 @@ class MainWindow(QMainWindow):
             self.nllb_combo.currentData(),
             self.xtts_combo.currentData(),
             self.src_lang_combo.currentData(),
-            self.tgt_lang_combo.currentData(),
+            selected_target_languages,  # Pass the list of selected target languages
             transcription_only
         )
 
@@ -706,6 +743,15 @@ class MainWindow(QMainWindow):
         # Start the thread
         self.processing_thread.start()
     
+    def get_selected_target_languages(self):
+        """Get list of selected target language codes from checkboxes"""
+        selected_languages = []
+        for checkbox in self.target_language_checkboxes:
+            if checkbox.isChecked():
+                language_code = checkbox.objectName()  # Get language code from object name
+                selected_languages.append(language_code)
+        return selected_languages
+
     def validate_inputs(self, transcription_only=False):
         """Validate all input fields"""
         errors = []
@@ -749,6 +795,11 @@ class MainWindow(QMainWindow):
                     # Check if model.pth exists (key file) or at least 2 required files exist
                     if required_found < 1 or (required_found < 2 and not os.path.exists(os.path.join(self.xtts_combo.currentData(), 'model.pth'))):
                         errors.append("Selected Narration model directory is missing required model files (config.json, model.pth, etc.)")
+
+                # Validate that at least one target language is selected
+                selected_target_languages = self.get_selected_target_languages()
+                if not selected_target_languages:
+                    errors.append("Please select at least one target language for translation")
 
             # Check if audio file is selected
             if not self.audio_file_path:
@@ -817,7 +868,7 @@ class ProcessingThread(QThread):
     processing_finished = pyqtSignal(bool, str)
 
     def __init__(self, audio_file, ref_audio, whisper_model, nllb_model, xtts_model,
-                 src_lang, tgt_lang, transcription_only):
+                 src_lang, tgt_lang_list, transcription_only):
         super().__init__()
         self.audio_file = audio_file
         self.ref_audio = ref_audio
@@ -825,7 +876,7 @@ class ProcessingThread(QThread):
         self.nllb_model = nllb_model
         self.xtts_model = xtts_model
         self.src_lang = src_lang
-        self.tgt_lang = tgt_lang
+        self.tgt_lang_list = tgt_lang_list  # Changed to accept a list of target languages
         self.transcription_only = transcription_only
         self._stop_flag = False
 
@@ -913,11 +964,9 @@ class ProcessingThread(QThread):
             # Create timestamped filenames for all three output files
             sanitized_name = sanitize_filename(os.path.splitext(os.path.basename(self.audio_file))[0])
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            # Define output paths for the three files
+
+            # Define output paths for the transcription file
             transcription_output_path = f"./Outputs/{sanitized_name}_transcription_{timestamp}.txt"
-            translation_output_path = f"./Outputs/{sanitized_name}_translation_{timestamp}.txt"
-            audio_output_path = f"./Outputs/{sanitized_name}_dubbed_{self.tgt_lang}_{timestamp}.wav"
 
             # Save transcription text to file first
             self.log_updated.emit(f"Saving transcription to: {transcription_output_path}")
@@ -931,34 +980,16 @@ class ProcessingThread(QThread):
                 self.processing_finished.emit(False, "Processing stopped by user")
                 return
 
-            self.status_updated.emit("Loading NLLB translator...")
-            self.log_updated.emit("Loading NLLB model...")
-            self.progress_updated.emit(60)
-
-            # Initialize translator
-            self.log_updated.emit(f"Initializing NLLB model: {self.nllb_model}")
-            logging.debug(f"NLLB model path: {self.nllb_model}")
-            translator = Translator(self.nllb_model)
-
-            if self._stop_flag:
-                logging.info("Processing stopped by user")
-                self.processing_finished.emit(False, "Processing stopped by user")
-                return
-
-            self.status_updated.emit("Translating text...")
-            self.log_updated.emit("Starting translation...")
-            self.progress_updated.emit(70)
-
             # Read the transcription from the saved file to use for translation
             with open(transcription_output_path, 'r', encoding='utf-8') as f:
                 raw_transcription = f.read()
-            
+
             # Clean up the transcription text by extracting just the spoken content
             # The transcription file contains timestamps and text in format: [time --> time] text
             lines = raw_transcription.split('\n')
             text_parts = []
             seen_words = set()  # Track seen words to avoid duplicates
-            
+
             for line in lines:
                 line = line.strip()
                 # Look for lines with timestamp format [00:00:00.000 --> 00:00:00.000] text
@@ -978,89 +1009,119 @@ class ProcessingThread(QThread):
                                     if word_lower not in seen_words:
                                         unique_words.append(word)
                                         seen_words.add(word_lower)
-                                
+
                                 if unique_words:
                                     unique_text = ' '.join(unique_words)
                                     text_parts.append(unique_text)
-            
+
             # Join all text parts to form a coherent paragraph
             # The Whisper output has each word on a separate line, so we need to reconstruct sentences
             cleaned_transcription = ' '.join(text_parts).strip()
-            
+
             # Remove extra spaces and clean up
             import re
             cleaned_transcription = re.sub(r'\s+', ' ', cleaned_transcription)
             cleaned_transcription = cleaned_transcription.strip()
-            
+
             # If the cleaned text is empty, use the raw transcription as fallback
             if not cleaned_transcription:
                 cleaned_transcription = raw_transcription
-            
+
             self.log_updated.emit(f"Cleaned transcription text length: {len(cleaned_transcription)} characters")
+
+            # Determine source language for translation based on user selection
+            # If user selected "auto", use detected language; otherwise use user's selection
+            if self.src_lang == "auto":
+                # Use detected language from transcription
+                src_lang_for_translation = detected_language
+            else:
+                # Use user's selected source language
+                src_lang_for_translation = self.src_lang
+
+            # Map the source language to NLLB format
+            src_lang_for_nllb = map_language_code(src_lang_for_translation, to_nllb_format=True)
+
+            # Process each selected target language
+            output_files = []
+            output_files.append(f"Transcription saved to: {transcription_output_path}")
             
-            # Translate the cleaned text from the saved transcription file
-            # Map the detected language to NLLB format if needed
-            src_lang_for_nllb = map_language_code(detected_language, to_nllb_format=True)
-            tgt_lang_for_nllb = map_language_code(self.tgt_lang, to_nllb_format=True)  # Ensure target language is in NLLB format
-            
-            self.log_updated.emit(f"Translating from {src_lang_for_nllb} to {tgt_lang_for_nllb}")
-            logging.debug(f"Source language: {src_lang_for_nllb}, Target language: {tgt_lang_for_nllb}")
-            translated_text = translator.translate(cleaned_transcription, src_lang_for_nllb, tgt_lang_for_nllb)
+            # Calculate progress increment per language
+            num_languages = len(self.tgt_lang_list)
+            if num_languages > 0:
+                progress_per_language = 30 // num_languages  # Distribute 30% progress across languages
+            else:
+                progress_per_language = 0
 
-            self.log_updated.emit("Translation completed")
-            logging.debug(f"Translated text length: {len(translated_text)} characters")
-            self.progress_updated.emit(80)
+            current_progress = 70  # Start from 70% after transcription
 
-            if self._stop_flag:
-                logging.info("Processing stopped by user")
-                self.processing_finished.emit(False, "Processing stopped by user")
-                return
+            for i, tgt_lang in enumerate(self.tgt_lang_list):
+                if self._stop_flag:
+                    logging.info("Processing stopped by user")
+                    self.processing_finished.emit(False, "Processing stopped by user")
+                    return
 
-            # Save translation text to file
-            self.log_updated.emit(f"Saving translation to: {translation_output_path}")
-            with open(translation_output_path, 'w', encoding='utf-8') as f:
-                f.write(translated_text)
-            self.log_updated.emit(f"Translation saved to: {translation_output_path}")
+                self.status_updated.emit(f"Translating to {tgt_lang}...")
+                self.log_updated.emit(f"Starting translation to {tgt_lang}...")
+                
+                # Map the target language to NLLB format
+                tgt_lang_for_nllb = map_language_code(tgt_lang, to_nllb_format=True)
 
-            self.status_updated.emit("Loading XTTS voice cloner...")
-            self.log_updated.emit("Loading XTTS model...")
-            self.progress_updated.emit(90)
+                self.log_updated.emit(f"Translating from {src_lang_for_nllb} to {tgt_lang_for_nllb}")
+                logging.debug(f"Source language: {src_lang_for_nllb}, Target language: {tgt_lang_for_nllb}")
+                
+                # Translate the cleaned text
+                translated_text = translator.translate(cleaned_transcription, src_lang_for_nllb, tgt_lang_for_nllb)
 
-            # Initialize voice cloner
-            self.log_updated.emit(f"Initializing XTTS model: {self.xtts_model}")
-            logging.debug(f"XTTS model path: {self.xtts_model}")
-            cloner = VoiceCloner(self.xtts_model)
+                # Create specific output paths for this language
+                translation_output_path = f"./Outputs/{sanitized_name}_translation_{tgt_lang}_{timestamp}.txt"
+                audio_output_path = f"./Outputs/{sanitized_name}_dubbed_{tgt_lang}_{timestamp}.wav"
 
-            if self._stop_flag:
-                logging.info("Processing stopped by user")
-                self.processing_finished.emit(False, "Processing stopped by user")
-                return
+                # Save translation text to file
+                self.log_updated.emit(f"Saving translation to: {translation_output_path}")
+                with open(translation_output_path, 'w', encoding='utf-8') as f:
+                    f.write(translated_text)
+                self.log_updated.emit(f"Translation saved to: {translation_output_path}")
+                output_files.append(f"Translation to {tgt_lang} saved to: {translation_output_path}")
 
-            self.status_updated.emit("Generating dubbed audio...")
-            self.log_updated.emit("Generating audio with cloned voice...")
-            self.progress_updated.emit(95)
+                self.status_updated.emit(f"Generating dubbed audio for {tgt_lang}...")
+                self.log_updated.emit(f"Generating audio with cloned voice for {tgt_lang}...")
+                
+                # Map target language for XTTS (which expects 2-letter codes)
+                # Use the mapping function to properly convert from NLLB format to XTTS format
+                tgt_lang_for_xtts = map_language_code(tgt_lang, to_nllb_format=False)  # Convert from NLLB to XTTS format
 
-            # Read the translation from the saved file to use for dubbing
-            with open(translation_output_path, 'r', encoding='utf-8') as f:
-                translation_text = f.read()
+                # Initialize voice cloner for this language (only once if needed)
+                if i == 0:  # Only initialize once
+                    self.log_updated.emit(f"Initializing XTTS model: {self.xtts_model}")
+                    logging.debug(f"XTTS model path: {self.xtts_model}")
+                    cloner = VoiceCloner(self.xtts_model)
 
-            # Generate and save dubbed audio using the saved translation file
-            self.log_updated.emit(f"Generating dubbed audio: {audio_output_path}")
-            logging.debug(f"Reference audio: {self.ref_audio}, Output path: {audio_output_path}, Language: {self.tgt_lang.split('_')[0]}")
-            cloner.clone_voice(translation_text, self.ref_audio, audio_output_path, self.tgt_lang.split('_')[0])
+                if self._stop_flag:
+                    logging.info("Processing stopped by user")
+                    self.processing_finished.emit(False, "Processing stopped by user")
+                    return
 
-            self.log_updated.emit(f"Dubbed audio saved to: {audio_output_path}")
+                # Generate and save dubbed audio using the saved translation file
+                self.log_updated.emit(f"Generating dubbed audio: {audio_output_path}")
+                logging.debug(f"Reference audio: {self.ref_audio}, Output path: {audio_output_path}, Language: {tgt_lang_for_xtts}")
+                cloner.clone_voice(translated_text, self.ref_audio, audio_output_path, tgt_lang_for_xtts)
+
+                self.log_updated.emit(f"Dubbed audio for {tgt_lang} saved to: {audio_output_path}")
+                output_files.append(f"Dubbed audio for {tgt_lang} saved to: {audio_output_path}")
+                
+                # Update progress
+                current_progress += progress_per_language
+                self.progress_updated.emit(min(current_progress, 95))  # Cap at 95%
+
             self.status_updated.emit("Processing completed successfully!")
             self.progress_updated.emit(100)
 
-            # Prepare message with all three output files
-            output_message = f"Processing completed successfully!\n"
-            output_message += f"Transcription saved to: {transcription_output_path}\n"
-            output_message += f"Translation saved to: {translation_output_path}\n"
-            output_message += f"Dubbed audio saved to: {audio_output_path}"
-            
+            # Prepare message with all output files
+            output_message = f"Processing completed successfully for {num_languages} language(s)!\n"
+            output_message += '\n'.join(output_files)
+
             self.processing_finished.emit(True, output_message)
-            logging.info(f"Processing completed successfully. Output files:\n{transcription_output_path}\n{translation_output_path}\n{audio_output_path}")
+            logging.info(f"Processing completed successfully for {num_languages} language(s). Output files:\n" + '\n'.join(output_files))
 
         except FileNotFoundError as e:
             error_msg = f"File not found: {str(e)}"

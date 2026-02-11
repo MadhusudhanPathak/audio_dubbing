@@ -25,6 +25,7 @@ MANIFEST
 venv/
 env/
 ENV/
+.venv/
 
 # IDE
 .vscode/
@@ -32,16 +33,42 @@ ENV/
 *.swp
 *.swo
 *~
+.vscode/settings.json
+.vscode/tasks.json
+.vscode/launch.json
+.vscode/extensions.json
 
 # OS
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Icon?
+.directory
+*.nfs
+
+# Logs
+*.log
+offline_dubbing.log
+logs/
+*.log.*
+
+# Local configuration
+config/local_settings.py
+.env
+.env.local
+.env.dev
+.env.prod
+.env.staging
+.env.testing
+.env.backup
 
 # Application specific
 Outputs/
 Inputs/
-offline_dubbing.log
-*.log
+tmp/
+temp/
+*.tmp
+*.temp
 
 # Models (these should not be committed due to size)
 Models/**/*
@@ -60,9 +87,117 @@ Models/**/*
 *.pyo
 *.pyd
 *.pyd.bak
+*.py.class
 
-# Environment specific
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# Distribution / packaging
+.Python
+*.egg-info/
+.egg-info/
+.eggs/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+develop-eggs/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
 .env
-.env.local
-.env.dev
-.env.prod
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre
+.pyre/

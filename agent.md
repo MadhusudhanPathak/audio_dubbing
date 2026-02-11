@@ -7,27 +7,32 @@ This is a professional offline audio dubbing application that performs speech-to
 ## Current State
 
 ### Core Components
-- **Transcriber** (`src/core/transcriber.py`): Handles audio-to-text conversion using Whisper models
-- **Translator** (`src/core/translator.py`): Performs text translation using NLLB models
-- **Voice Cloner** (`src/core/voice_cloner.py`): Generates dubbed audio with cloned voices using XTTS-v2
-- **Helpers** (`src/utils/helpers.py`): Contains utility functions for file operations, validation, and language mapping
-- **Main Application** (`src/ui/main_window.py`): PyQt5-based GUI that orchestrates the entire process
-- **Configuration** (`src/config/app_config.py`): Centralized application configuration
+- **Transcription Service** (`src/services/transcription_service.py`): Handles audio-to-text conversion using Whisper models
+- **Translation Service** (`src/services/translation_service.py`): Performs text translation using NLLB models
+- **Voice Synthesis Service** (`src/services/voice_synthesis_service.py`): Generates dubbed audio with cloned voices using XTTS-v2
+- **Helpers** (`src/common/helpers.py`): Contains utility functions for file operations, validation, and language mapping
+- **GUI Interface** (`src/interfaces/gui_interface.py`): PyQt5-based GUI that orchestrates the entire process
+- **Configuration** (`src/common/app_config.py`): Centralized application configuration
+- **Data Models** (`src/data_models/audio_models.py`): Defines data structures for audio processing
+- **Application Orchestrator** (`src/application/audio_orchestrator.py`): Manages the complete workflow
 
 ### Architecture
 ```
-Input Audio → Transcription (Whisper) → Translation (NLLB) → Voice Cloning (XTTS-v2) → Output Audio
+Input Audio → Transcription (Whisper) → Translation (NLLB) → Voice Synthesis (XTTS-v2) → Output Audio
 ```
 
 ### Recent Enhancements
-1. **Professional Modular Architecture**: Clean separation of concerns with core logic, UI, utilities, and configuration modules
-2. **Enhanced Error Handling**: Comprehensive input validation and error handling throughout the application
+1. **Professional Modular Architecture**: Clean separation of concerns with application, services, interfaces, data models, and common utilities
+2. **Enhanced Error Handling**: Comprehensive input validation and error handling throughout the application with custom exceptions
 3. **Configuration Management**: Centralized configuration system with proper defaults and validation
 4. **Improved Model Detection**: Enhanced model checking logic that looks for required files in both main directories and subdirectories
 5. **Cleaner UI**: Removed redundant action buttons and streamlined the interface
 6. **Direct Processing**: Mode selection buttons now directly trigger processing instead of requiring a separate start button
 7. **Improved Layout**: Swapped positions of Browse buttons and file selection status, and reorganized language selection
 8. **Concise Model Names**: Dropdowns now display only model names instead of full paths
+9. **Type Safety**: Added type hints for better code maintainability
+10. **Workflow Management**: Dedicated orchestrator for managing the complete audio processing workflow
+11. **Data Models**: Structured data models for better organization and maintainability
 
 ### Key Features
 - **Model Download Dialog**: Modal dialog showing required model downloads with local availability check
@@ -37,6 +42,7 @@ Input Audio → Transcription (Whisper) → Translation (NLLB) → Voice Cloning
 - **Intuitive Processing**: Direct action buttons for transcription and dubbed translation modes
 - **Comprehensive Logging**: Detailed logging with configurable levels and formats
 - **Robust Error Handling**: Proper validation and error reporting at all levels
+- **Timestamped Outputs**: All output files include timestamps to prevent conflicts
 
 ## Technical Details
 
@@ -66,25 +72,25 @@ Offline Audio Dubbing/
 │   └── xtts/             # XTTS model directories/files
 ├── src/                   # Source code root
 │   ├── __init__.py       # Package initialization
-│   ├── core/             # Core business logic
+│   ├── application/      # Application orchestration layer
 │   │   ├── __init__.py
-│   │   ├── transcriber.py # Audio transcription module
-│   │   ├── translator.py  # Text translation module
-│   │   └── voice_cloner.py # Voice cloning module
-│   ├── ui/               # User interface components
+│   │   └── audio_orchestrator.py # Workflow management
+│   ├── data_models/      # Data structures and models
 │   │   ├── __init__.py
-│   │   └── main_window.py # Main UI window
-│   ├── utils/            # Utility functions
+│   │   └── audio_models.py # Data classes for audio processing
+│   ├── services/         # Business logic and service implementations
 │   │   ├── __init__.py
-│   │   └── helpers.py    # Helper functions
-│   ├── config/           # Configuration module
+│   │   ├── transcription_service.py # Audio transcription service
+│   │   ├── translation_service.py   # Text translation service
+│   │   └── voice_synthesis_service.py # Voice synthesis service
+│   ├── interfaces/       # User interfaces and API endpoints
 │   │   ├── __init__.py
+│   │   └── gui_interface.py # Main GUI interface
+│   ├── common/           # Shared utilities and configuration
+│   │   ├── __init__.py
+│   │   ├── helpers.py    # Helper functions
 │   │   └── app_config.py # Application configuration
-│   └── models/           # Data models (if any)
-├── docs/                 # Documentation files
-├── tests/                # Unit and integration tests
-├── config/               # Configuration files
-└── scripts/              # Utility scripts
+└── tests/                # Unit and integration tests
 ```
 
 ### Processing Workflow
@@ -92,14 +98,14 @@ Offline Audio Dubbing/
 2. Application validates all inputs and file paths
 3. Transcription phase: Audio is converted to text using Whisper
 4. Translation phase: Text is translated using NLLB (if in dubbed mode)
-5. Voice cloning phase: Translated text is synthesized with cloned voice using XTTS-v2
-6. Output is saved to the Outputs directory
+5. Voice synthesis phase: Translated text is synthesized with cloned voice using XTTS-v2
+6. Output is saved to the Outputs directory with timestamps
 
 ### Error Handling Strategy
 - All file operations include existence checks
 - Model loading includes validation of model files
 - Audio processing includes format validation
-- Each processing step has specific error handling
+- Each processing step has specific error handling with custom exceptions
 - User receives informative error messages
 - All errors are logged for debugging
 - Comprehensive input validation at all levels
