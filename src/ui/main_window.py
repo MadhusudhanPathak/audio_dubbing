@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont, QPalette, QColor
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 import os
+from datetime import datetime
 # Add the project root to the path to allow imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
@@ -946,19 +947,44 @@ class ProcessingThread(QThread):
             self.progress_updated.emit(90)
 
             # Generate audio with cloned voice
+            # Create timestamped filenames for all three output files
             sanitized_name = sanitize_filename(os.path.splitext(os.path.basename(self.audio_file))[0])
-            output_path = f"./Outputs/{sanitized_name}_{self.tgt_lang}.wav"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Define output paths for the three files
+            transcription_output_path = f"./Outputs/{sanitized_name}_transcription_{timestamp}.txt"
+            translation_output_path = f"./Outputs/{sanitized_name}_translation_{timestamp}.txt"
+            audio_output_path = f"./Outputs/{sanitized_name}_dubbed_{self.tgt_lang}_{timestamp}.wav"
 
-            self.log_updated.emit(f"Generating dubbed audio: {output_path}")
-            logging.debug(f"Reference audio: {self.ref_audio}, Output path: {output_path}, Language: {self.tgt_lang.split('_')[0]}")
-            cloner.clone_voice(translated_text, self.ref_audio, output_path, self.tgt_lang.split('_')[0])
+            # Save transcription text to file
+            self.log_updated.emit(f"Saving transcription to: {transcription_output_path}")
+            with open(transcription_output_path, 'w', encoding='utf-8') as f:
+                f.write(transcribed_text)
+            self.log_updated.emit(f"Transcription saved to: {transcription_output_path}")
 
-            self.log_updated.emit(f"Dubbed audio saved to: {output_path}")
+            # Save translation text to file
+            self.log_updated.emit(f"Saving translation to: {translation_output_path}")
+            with open(translation_output_path, 'w', encoding='utf-8') as f:
+                f.write(translated_text)
+            self.log_updated.emit(f"Translation saved to: {translation_output_path}")
+
+            # Generate and save dubbed audio
+            self.log_updated.emit(f"Generating dubbed audio: {audio_output_path}")
+            logging.debug(f"Reference audio: {self.ref_audio}, Output path: {audio_output_path}, Language: {self.tgt_lang.split('_')[0]}")
+            cloner.clone_voice(translated_text, self.ref_audio, audio_output_path, self.tgt_lang.split('_')[0])
+
+            self.log_updated.emit(f"Dubbed audio saved to: {audio_output_path}")
             self.status_updated.emit("Processing completed successfully!")
             self.progress_updated.emit(100)
 
-            self.processing_finished.emit(True, f"Processing completed successfully!\nOutput saved to: {output_path}")
-            logging.info(f"Processing completed successfully. Output saved to: {output_path}")
+            # Prepare message with all three output files
+            output_message = f"Processing completed successfully!\n"
+            output_message += f"Transcription saved to: {transcription_output_path}\n"
+            output_message += f"Translation saved to: {translation_output_path}\n"
+            output_message += f"Dubbed audio saved to: {audio_output_path}"
+            
+            self.processing_finished.emit(True, output_message)
+            logging.info(f"Processing completed successfully. Output files:\n{transcription_output_path}\n{translation_output_path}\n{audio_output_path}")
 
         except FileNotFoundError as e:
             error_msg = f"File not found: {str(e)}"
