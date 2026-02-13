@@ -26,7 +26,8 @@ import logging
 import os
 from typing import Optional, Dict, Any, List
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, BitsAndBytesConfig
-from src.common.app_config import get_config
+from src.utils.common.app_config import get_config
+from src.utils.common.helpers import language_code_to_number, number_to_language_code
 
 
 class TranslationError(Exception):
@@ -59,7 +60,7 @@ class InvalidLanguageError(Exception):
 class Translator:
     """
     Enhanced NLLB Translator with improved performance and error handling.
-    
+
     This class handles text translation between multiple languages using NLLB models.
     It includes memory optimization, proper error handling, and support for various
     model formats.
@@ -72,7 +73,7 @@ class Translator:
         Args:
             model_path (str): Path to the NLLB model directory
             use_quantization (bool): Whether to use 8-bit quantization for memory efficiency
-            device (str, optional): Device to run the model on ('cuda' or 'cpu'). 
+            device (str, optional): Device to run the model on ('cuda' or 'cpu').
                                    If None, automatically detects available device.
 
         Raises:
@@ -82,7 +83,7 @@ class Translator:
         """
         self.model_path = model_path
         self.use_quantization = use_quantization
-        
+
         # Validate inputs
         if not model_path or not isinstance(model_path, str):
             raise ValueError("Model path must be a non-empty string")
@@ -93,7 +94,7 @@ class Translator:
 
         # Check if required model files exist
         required_files = ['config.json', 'pytorch_model.bin', 'tokenizer.json', 'generation_config.json']
-        
+
         missing_files = []
         for file in required_files:
             if not os.path.exists(os.path.join(model_path, file)):
@@ -112,7 +113,7 @@ class Translator:
                 self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             else:
                 self.device = torch.device(device)
-            
+
             logging.info(f"Using device: {self.device}")
 
             # Load tokenizer
@@ -152,15 +153,15 @@ class Translator:
 
             # Move model to device
             self.model.to(self.device)
-            
+
             # Set model to evaluation mode
             self.model.eval()
-            
+
             logging.info("NLLB model loaded successfully")
-            
+
             # Cache language codes for faster lookup
             self._cache_language_codes()
-            
+
         except Exception as e:
             logging.error(f"Failed to load NLLB model: {str(e)}")
             raise ModelLoadError(f"Failed to load NLLB model: {str(e)}")
@@ -176,8 +177,15 @@ class Translator:
             else:
                 # Fallback to common NLLB language codes
                 self.lang_code_to_id = self._get_common_language_codes()
-                
+
             logging.info(f"Cached {len(self.lang_code_to_id)} language codes")
+            logging.debug(f"Available language codes: {list(self.lang_code_to_id.keys())}")
+            
+            # Log specific language IDs for debugging
+            for lang_code in ['eng_Latn', 'ita_Latn', 'ara_Arab', 'spa_Latn', 'hin_Deva']:
+                if lang_code in self.lang_code_to_id:
+                    logging.debug(f"Language '{lang_code}' has ID: {self.lang_code_to_id[lang_code]}")
+                    
         except Exception as e:
             logging.warning(f"Could not cache language codes: {e}")
             self.lang_code_to_id = self._get_common_language_codes()
@@ -185,7 +193,7 @@ class Translator:
     def _get_common_language_codes(self) -> Dict[str, int]:
         """
         Get a dictionary of common NLLB language codes.
-        
+
         Returns:
             Dict[str, int]: Mapping of language codes to IDs
         """
@@ -217,10 +225,10 @@ class Translator:
             'swe_Latn', 'swh_Latn', 'szl_Latn', 'tam_Taml', 'taq_Latn', 'taq_Tfng', 'tat_Cyrl',
             'tel_Telu', 'tgk_Cyrl', 'tgl_Latn', 'tha_Thai', 'tur_Latn', 'twi_Latn', 'tzm_Tfng',
             'uig_Arab', 'ukr_Cyrl', 'umb_Latn', 'urd_Arab', 'uzb_Latn', 'vec_Latn', 'vie_Latn',
-            'war_Latn', 'wol_Latn', 'xho_Latn', 'ydd_Hebr', 'yor_Latn', 'yue_Hant', 'zho_Hans', 
+            'war_Latn', 'wol_Latn', 'xho_Latn', 'ydd_Hebr', 'yor_Latn', 'yue_Hant', 'zho_Hans',
             'zho_Hant', 'zsm_Latn', 'zul_Latn'
         ]
-        
+
         return {lang: idx for idx, lang in enumerate(common_lang_codes)}
 
     def _validate_language_codes(self, src_lang: str, tgt_lang: str) -> None:
@@ -234,18 +242,23 @@ class Translator:
         Raises:
             InvalidLanguageError: If language codes are not supported
         """
+        logging.debug(f"Validating language codes - src: {src_lang}, tgt: {tgt_lang}")
+        logging.debug(f"Available language codes: {list(self.lang_code_to_id.keys())[:10]}...")
+
         if src_lang not in self.lang_code_to_id:
             available_langs = list(self.lang_code_to_id.keys())[:10]  # Show first 10 languages
             raise InvalidLanguageError(
                 f"Source language '{src_lang}' not supported by model. "
-                f"Available languages: {available_langs}..."
+                f"Available languages: {available_langs}... "
+                f"Full list contains {len(self.lang_code_to_id)} languages."
             )
 
         if tgt_lang not in self.lang_code_to_id:
             available_langs = list(self.lang_code_to_id.keys())[:10]  # Show first 10 languages
             raise InvalidLanguageError(
                 f"Target language '{tgt_lang}' not supported by model. "
-                f"Available languages: {available_langs}..."
+                f"Available languages: {available_langs}... "
+                f"Full list contains {len(self.lang_code_to_id)} languages."
             )
 
     def _validate_input_text(self, text: str) -> None:
@@ -269,7 +282,7 @@ class Translator:
             logging.warning(f"Input text is very long ({len(text)} characters), "
                            "consider splitting it into smaller chunks for better performance")
 
-    def translate(self, text: str, src_lang: str, tgt_lang: str, 
+    def translate(self, text: str, src_lang: str, tgt_lang: str,
                   max_length: int = 512, num_beams: int = 5) -> str:
         """
         Translate text from source language to target language using NLLB model.
@@ -289,12 +302,15 @@ class Translator:
             InvalidLanguageError: If language codes are invalid
             ValueError: If input text is invalid
         """
+        # Log the incoming language codes for debugging
+        logging.info(f"Starting translation from {src_lang} to {tgt_lang}")
+        logging.debug(f"Input text: {text[:100]}..." if len(text) > 100 else f"Input text: {text}")
+        
         # Validate inputs
         self._validate_input_text(text)
         self._validate_language_codes(src_lang, tgt_lang)
 
         try:
-            logging.info(f"Starting translation from {src_lang} to {tgt_lang}")
             logging.debug(f"Input text length: {len(text)} characters")
 
             # Handle empty text case
@@ -304,21 +320,49 @@ class Translator:
 
             # Get target language ID
             tgt_lang_id = self.lang_code_to_id[tgt_lang]
+            logging.debug(f"Target language ID for '{tgt_lang}': {tgt_lang_id}")
+
+            # Verify that the source language is also valid
+            src_lang_id = self.lang_code_to_id[src_lang]
+            logging.debug(f"Source language ID for '{src_lang}': {src_lang_id}")
+
+            # For NLLB models, we need to include the target language in the input
+            # The format is usually: [SRC_LANG_CODE] text [TGT_LANG_CODE]
+            # Using the special language tokens from the tokenizer
+            full_input_text = f"{text}"
             
-            # Tokenize the input text with source language context
+            # Tokenize with the input text
             inputs = self.tokenizer(
-                text,
+                full_input_text,
                 return_tensors="pt",
                 padding=True,
                 truncation=True,
                 max_length=512
             ).to(self.device)
+            
+            # For NLLB models, we need to make sure the target language is properly specified
+            # Some implementations require using prepare_seq2seq_batch
+            if hasattr(self.tokenizer, 'prepare_seq2seq_batch'):
+                # Use the tokenizer's specific method for NLLB
+                inputs = self.tokenizer.prepare_seq2seq_batch(
+                    [text],
+                    src_lang=src_lang,
+                    tgt_lang=tgt_lang,
+                    return_tensors="pt",
+                    padding=True,
+                    truncation=True,
+                    max_length=512
+                ).to(self.device)
 
-            # Generate translation with proper language ID handling
+            # Log tokenizer input for debugging
+            logging.debug(f"Tokenized input shape: {inputs['input_ids'].shape}")
+            
+            # Generate translation
+            # Since we're using prepare_seq2seq_batch, the target language is already encoded in the input
+            # So we don't need to specify decoder_start_token_id separately
             with torch.no_grad():  # Disable gradient computation for inference
                 outputs = self.model.generate(
                     **inputs,
-                    forced_bos_token_id=tgt_lang_id,
                     max_length=max_length,
                     num_beams=num_beams,
                     length_penalty=1.0,
@@ -333,9 +377,10 @@ class Translator:
             # Decode the translated text
             translated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-            logging.info(f"Translation completed successfully")
+            logging.info(f"Translation completed successfully from {src_lang} to {tgt_lang}")
             logging.debug(f"Output text length: {len(translated_text)} characters")
-            
+            logging.debug(f"Output text: {translated_text[:100]}..." if len(translated_text) > 100 else f"Output text: {translated_text}")
+
             return translated_text.strip()
 
         except torch.cuda.OutOfMemoryError:
@@ -349,13 +394,13 @@ class Translator:
             logging.error(f"Error during translation: {str(e)}")
             raise TranslationError(f"Translation failed: {str(e)}")
 
-    def translate_batch(self, texts: List[str], src_lang: str, tgt_lang: str, 
+    def translate_batch(self, texts: List[str], src_lang: str, tgt_lang: str,
                        max_length: int = 512, num_beams: int = 5) -> List[str]:
         """
         Translate multiple texts from source language to target language.
 
-        This method processes multiple texts in sequence, applying the same 
-        translation parameters to each. Individual failures are logged but 
+        This method processes multiple texts in sequence, applying the same
+        translation parameters to each. Individual failures are logged but
         don't halt the entire batch processing.
 
         Args:
@@ -368,7 +413,7 @@ class Translator:
         Returns:
             List[str]: List of translated texts, maintaining the same order
                       as the input list. Failed translations return empty strings.
-                      
+
         Raises:
             ValueError: If texts is not a list or is empty
             InvalidLanguageError: If language codes are invalid
@@ -414,7 +459,7 @@ class Translator:
         Returns:
             str: Detected language code in BCP-47 format (e.g., 'eng_Latn', 'rus_Cyrl')
                  or 'unknown' if detection fails or text is empty
-                 
+
         Example:
             >>> translator = Translator(model_path)
             >>> lang = translator.detect_language("Hello world")
@@ -427,7 +472,7 @@ class Translator:
 
         # Simple heuristic based on common language characteristics
         text_lower = text.lower()
-        
+
         # Check for common language indicators
         if any(char in text for char in 'абвгдеёжзийклmnопрстуфхцчшщъыьэюя'):
             return 'rus_Cyrl'  # Russian
@@ -467,7 +512,7 @@ class Translator:
         This method is useful when working with limited memory resources
         or when you need to switch between different models. It removes
         references to the model and tokenizer objects and clears the GPU cache.
-        
+
         Usage:
             >>> translator = Translator(model_path)
             >>> # ... perform translations ...
@@ -492,14 +537,14 @@ class Translator:
 if __name__ == "__main__":
     import sys
     import os
-    
+
     # Add the project root to the path to allow imports
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     sys.path.insert(0, project_root)
-    
+
     # Example of how to use the Translator class
     # translator = Translator("path/to/nllb/model/")
     # result = translator.translate("Hello world", "eng_Latn", "spa_Latn")
     # print(result)
-    
+
     print("Translator module loaded successfully")

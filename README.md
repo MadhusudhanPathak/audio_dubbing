@@ -19,6 +19,7 @@ A professional desktop application for offline audio translation with voice clon
 - Clean separation of business logic, UI, and utilities
 - Improved application orchestration with dedicated workflow management
 - Enhanced data models for better structure and maintainability
+- Modern directory structure following industry standards
 
 ## 📋 Prerequisites
 
@@ -141,24 +142,30 @@ offline-audio-dubbing/
 │   └── xtts/             # XTTS model directories/files
 ├── src/                   # Source code root
 │   ├── __init__.py       # Package initialization
-│   ├── application/      # Application orchestration layer
+│   ├── core/             # Core application logic
 │   │   ├── __init__.py
-│   │   └── audio_orchestrator.py # Workflow management
-│   ├── data_models/      # Data structures and models
+│   │   ├── application/  # Application orchestration layer
+│   │   │   ├── __init__.py
+│   │   │   └── audio_orchestrator.py # Workflow management
+│   │   ├── data_models/  # Data structures and models
+│   │   │   ├── __init__.py
+│   │   │   └── audio_models.py # Data classes for audio processing
+│   │   └── services/     # Business logic and service implementations
+│   │       ├── __init__.py
+│   │       ├── transcription_service.py # Audio transcription service
+│   │       ├── translation_service.py   # Text translation service
+│   │       └── voice_synthesis_service.py # Voice synthesis service
+│   ├── api/              # User interfaces and API endpoints
 │   │   ├── __init__.py
-│   │   └── audio_models.py # Data classes for audio processing
-│   ├── services/         # Business logic and service implementations
-│   │   ├── __init__.py
-│   │   ├── transcription_service.py # Audio transcription service
-│   │   ├── translation_service.py   # Text translation service
-│   │   └── voice_synthesis_service.py # Voice synthesis service
-│   ├── interfaces/       # User interfaces and API endpoints
-│   │   ├── __init__.py
-│   │   └── gui_interface.py # Main GUI interface
-│   ├── common/           # Shared utilities and configuration
-│   │   ├── __init__.py
-│   │   ├── helpers.py    # Helper functions
-│   │   └── app_config.py # Application configuration
+│   │   └── interfaces/   # GUI and API interfaces
+│   │       ├── __init__.py
+│   │       └── gui_interface.py # Main GUI interface
+│   └── utils/            # Shared utilities and configuration
+│       ├── __init__.py
+│       └── common/       # Helper functions and configuration
+│           ├── __init__.py
+│           ├── helpers.py    # Helper functions
+│           └── app_config.py # Application configuration
 └── tests/                # Unit and integration tests
 ```
 

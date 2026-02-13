@@ -4,7 +4,7 @@ import re
 import logging
 from pathlib import Path
 from typing import Union, Tuple
-from src.common.app_config import get_config
+from src.utils.common.app_config import get_config
 
 
 class TranscriptionError(Exception):

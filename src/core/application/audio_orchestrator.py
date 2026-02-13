@@ -13,7 +13,7 @@ from ..data_models.audio_models import (
 from ..services.transcription_service import Transcriber
 from ..services.translation_service import Translator
 from ..services.voice_synthesis_service import VoiceCloner
-from ..common.helpers import sanitize_filename
+from ..utils.common.helpers import sanitize_filename
 from datetime import datetime
 import os
 
@@ -43,7 +43,7 @@ class AudioDubbingOrchestrator:
             self.logger.info(f"Starting audio processing with mode: {config.processing_mode.value}")
             
             # Ensure output directory exists
-            from ..common.helpers import ensure_directory_exists
+            from ..utils.common.helpers import ensure_directory_exists
             ensure_directory_exists("./Outputs")
             
             # Sanitize the output filename to prevent issues

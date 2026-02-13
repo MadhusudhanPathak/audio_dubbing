@@ -7,14 +7,14 @@ This is a professional offline audio dubbing application that performs speech-to
 ## Current State
 
 ### Core Components
-- **Transcription Service** (`src/services/transcription_service.py`): Handles audio-to-text conversion using Whisper models
-- **Translation Service** (`src/services/translation_service.py`): Performs text translation using NLLB models
-- **Voice Synthesis Service** (`src/services/voice_synthesis_service.py`): Generates dubbed audio with cloned voices using XTTS-v2
-- **Helpers** (`src/common/helpers.py`): Contains utility functions for file operations, validation, and language mapping
-- **GUI Interface** (`src/interfaces/gui_interface.py`): PyQt5-based GUI that orchestrates the entire process
-- **Configuration** (`src/common/app_config.py`): Centralized application configuration
-- **Data Models** (`src/data_models/audio_models.py`): Defines data structures for audio processing
-- **Application Orchestrator** (`src/application/audio_orchestrator.py`): Manages the complete workflow
+- **Transcription Service** (`src/core/services/transcription_service.py`): Handles audio-to-text conversion using Whisper models
+- **Translation Service** (`src/core/services/translation_service.py`): Performs text translation using NLLB models
+- **Voice Synthesis Service** (`src/core/services/voice_synthesis_service.py`): Generates dubbed audio with cloned voices using XTTS-v2
+- **Helpers** (`src/utils/common/helpers.py`): Contains utility functions for file operations, validation, and language mapping
+- **GUI Interface** (`src/api/interfaces/gui_interface.py`): PyQt5-based GUI that orchestrates the entire process
+- **Configuration** (`src/utils/common/app_config.py`): Centralized application configuration
+- **Data Models** (`src/core/data_models/audio_models.py`): Defines data structures for audio processing
+- **Application Orchestrator** (`src/core/application/audio_orchestrator.py`): Manages the complete workflow
 
 ### Architecture
 ```
@@ -33,6 +33,9 @@ Input Audio → Transcription (Whisper) → Translation (NLLB) → Voice Synthes
 9. **Type Safety**: Added type hints for better code maintainability
 10. **Workflow Management**: Dedicated orchestrator for managing the complete audio processing workflow
 11. **Data Models**: Structured data models for better organization and maintainability
+12. **Modern Directory Structure**: Following industry-standard architectural patterns with logical hierarchy that separates concerns clearly
+13. **Modular Design**: Breaking down monolithic files into smaller, focused modules with single responsibilities
+14. **Enhanced Documentation**: Clear inline documentation for public functions and consistent naming conventions
 
 ### Key Features
 - **Model Download Dialog**: Modal dialog showing required model downloads with local availability check
@@ -72,24 +75,30 @@ Offline Audio Dubbing/
 │   └── xtts/             # XTTS model directories/files
 ├── src/                   # Source code root
 │   ├── __init__.py       # Package initialization
-│   ├── application/      # Application orchestration layer
+│   ├── core/             # Core application logic
 │   │   ├── __init__.py
-│   │   └── audio_orchestrator.py # Workflow management
-│   ├── data_models/      # Data structures and models
+│   │   ├── application/  # Application orchestration layer
+│   │   │   ├── __init__.py
+│   │   │   └── audio_orchestrator.py # Workflow management
+│   │   ├── data_models/  # Data structures and models
+│   │   │   ├── __init__.py
+│   │   │   └── audio_models.py # Data classes for audio processing
+│   │   └── services/     # Business logic and service implementations
+│   │       ├── __init__.py
+│   │       ├── transcription_service.py # Audio transcription service
+│   │       ├── translation_service.py   # Text translation service
+│   │       └── voice_synthesis_service.py # Voice synthesis service
+│   ├── api/              # User interfaces and API endpoints
 │   │   ├── __init__.py
-│   │   └── audio_models.py # Data classes for audio processing
-│   ├── services/         # Business logic and service implementations
-│   │   ├── __init__.py
-│   │   ├── transcription_service.py # Audio transcription service
-│   │   ├── translation_service.py   # Text translation service
-│   │   └── voice_synthesis_service.py # Voice synthesis service
-│   ├── interfaces/       # User interfaces and API endpoints
-│   │   ├── __init__.py
-│   │   └── gui_interface.py # Main GUI interface
-│   ├── common/           # Shared utilities and configuration
-│   │   ├── __init__.py
-│   │   ├── helpers.py    # Helper functions
-│   │   └── app_config.py # Application configuration
+│   │   └── interfaces/   # GUI and API interfaces
+│   │       ├── __init__.py
+│   │       └── gui_interface.py # Main GUI interface
+│   └── utils/            # Shared utilities and configuration
+│       ├── __init__.py
+│       ├── common/       # Helper functions and configuration
+│       │   ├── __init__.py
+│       │   ├── helpers.py    # Helper functions
+│       │   └── app_config.py # Application configuration
 └── tests/                # Unit and integration tests
 ```
 

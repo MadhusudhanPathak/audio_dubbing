@@ -12,7 +12,7 @@ project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
 from PyQt5.QtWidgets import QApplication
-from src.interfaces.gui_interface import MainWindow
+from src.api.interfaces.gui_interface import MainWindow
 import logging
 
 

@@ -5,7 +5,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Union
-from src.common.app_config import get_config
+from src.utils.common.app_config import get_config
 
 
 class VoiceSynthesisError(Exception):
@@ -205,28 +205,21 @@ class VoiceCloner:
             str: XTTS-compatible 2-letter language code
         """
         # If it's already a 2-letter code that XTTS supports, return as is
-        xtts_supported = ['en', 'es', 'fr', 'de', 'it', 'pt', 'pl', 'tr', 'ru', 'nl', 'cs', 'ar', 'zh-cn', 'hu', 'ko', 'ja', 'hi']
+        xtts_supported = ['en', 'es', 'fr', 'de', 'it', 'hi']  # Only include our selected languages
 
         # If it's in the NLLB format like 'eng_Latn', extract the base language code
         if '_' in language_code:
             base_code = language_code.split('_')[0].lower()
-            
-            # Special handling for common NLLB codes
+
+            # Special handling for our selected NLLB codes
             nllb_to_xtts = {
-                'eng': 'en',      # English
                 'spa': 'es',      # Spanish
                 'fra': 'fr',      # French
                 'deu': 'de',      # German
                 'ita': 'it',      # Italian
-                'por': 'pt',      # Portuguese
-                'rus': 'ru',      # Russian
-                'zho': 'zh-cn',   # Chinese
-                'jpn': 'ja',      # Japanese
-                'kor': 'ko',      # Korean
-                'ara': 'ar',      # Arabic
                 'hin': 'hi',      # Hindi
             }
-            
+
             if base_code in nllb_to_xtts:
                 xtts_code = nllb_to_xtts[base_code]
                 if xtts_code in xtts_supported:
@@ -236,34 +229,21 @@ class VoiceCloner:
         if len(language_code) >= 2:
             base_code = language_code[:3].lower() if len(language_code) >= 3 else language_code[:2].lower()
 
-            # Handle special cases
-            if language_code.lower().startswith('zh'):
-                base_code = 'zh-cn'  # Chinese simplified
-            elif language_code.lower().startswith('jp'):
-                base_code = 'ja'     # Japanese
-            elif language_code.lower().startswith('ko'):
-                base_code = 'ko'     # Korean
-            elif language_code.lower().startswith('hi'):
+            # Handle special cases for our selected languages
+            if language_code.lower().startswith('hi'):
                 base_code = 'hi'     # Hindi
 
             # Check if the base code is supported
             if base_code in xtts_supported:
                 return base_code
 
-        # If the 2-letter code isn't supported, try to map common variations
+        # If the 2-letter code isn't supported, try to map our selected languages
         language_mapping = {
             'ita': 'it',      # Italian
-            'eng': 'en',      # English
-            'fra': 'fr',      # French
             'deu': 'de',      # German
+            'fra': 'fr',      # French
             'spa': 'es',      # Spanish
-            'por': 'pt',      # Portuguese
-            'rus': 'ru',      # Russian
-            'kor': 'ko',      # Korean
-            'jpn': 'ja',      # Japanese
-            'ara': 'ar',      # Arabic
             'hin': 'hi',      # Hindi
-            'zho': 'zh-cn',   # Chinese
         }
 
         # Check if the full code is in our mapping
