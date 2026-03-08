@@ -769,7 +769,7 @@ class MainWindow(QMainWindow):
     def on_processing_finished(self, success, message):
         """Handle processing completion"""
         # Re-enable the mode buttons after processing is complete
-        self.transcription_only_btn.setEnabled(True)
+        self.transcript_only_btn.setEnabled(True)
         self.dubbed_translation_btn.setEnabled(True)
 
         if success:

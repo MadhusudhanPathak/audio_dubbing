@@ -281,17 +281,17 @@ class VoiceCloner:
             waveform, sample_rate = torchaudio.load(audio_path)
             duration = waveform.shape[1] / sample_rate
             return duration
-except (OSError, RuntimeError) as e:
-                # Fallback to pydub
-                try:
-                    from pydub import AudioSegment
-                    audio = AudioSegment.from_file(audio_path)
-                    duration = len(audio) / 1000.0  # pydub returns duration in milliseconds
-                    return duration
-                except (OSError, RuntimeError) as pydub_error:
-                    # If all methods fail, return 0
-                    logging.warning(f"Could not determine duration of audio file: {audio_path} - {pydub_error}")
-                return 0.0
+        except (OSError, RuntimeError) as e:
+            # Fallback to pydub
+            try:
+                from pydub import AudioSegment
+                audio = AudioSegment.from_file(audio_path)
+                duration = len(audio) / 1000.0  # pydub returns duration in milliseconds
+                return duration
+            except (OSError, RuntimeError) as pydub_error:
+                # If all methods fail, return 0
+                logging.warning(f"Could not determine duration of audio file: {audio_path} - {pydub_error}")
+            return 0.0
 
     def __del__(self):
         """
