@@ -4,8 +4,12 @@ Application orchestrator for the Offline Audio Dubbing application.
 This module manages the overall workflow and coordinates between different services.
 """
 
-from typing import List, Optional
+import os
+import re
 import logging
+from datetime import datetime
+from typing import List, Optional, Callable
+
 from ..data_models.audio_models import (
     AudioProcessingConfig, TranscriptionResult, 
     TranslationResult, VoiceSynthesisResult, ProcessingMode
@@ -13,9 +17,10 @@ from ..data_models.audio_models import (
 from ..services.transcription_service import Transcriber
 from ..services.translation_service import Translator
 from ..services.voice_synthesis_service import VoiceCloner
-from ..utils.common.helpers import sanitize_filename
-from datetime import datetime
-import os
+from ...utils.common.helpers import (
+    sanitize_filename, map_language_code, 
+    ensure_directory_exists, get_nllb_languages
+)
 
 
 class AudioDubbingOrchestrator:
@@ -23,216 +28,198 @@ class AudioDubbingOrchestrator:
     Orchestrates the complete audio dubbing workflow.
     
     This class manages the entire process from transcription to translation to voice synthesis.
+    Supports various input types: audio file, transcription text, or translation text.
     """
     
-    def __init__(self):
-        """Initialize the orchestrator."""
-        self.logger = logging.getLogger(__name__)
-        
-    def process_audio(self, config: AudioProcessingConfig) -> bool:
+    def __init__(self, progress_callback: Optional[Callable[[int], None]] = None, 
+                 status_callback: Optional[Callable[[str], None]] = None,
+                 log_callback: Optional[Callable[[str], None]] = None):
         """
-        Process audio according to the specified configuration.
+        Initialize the orchestrator.
         
         Args:
-            config: Configuration for the audio processing
+            progress_callback: Function to call with progress percentage (0-100)
+            status_callback: Function to call with status messages
+            log_callback: Function to call with detailed log messages
+        """
+        self.logger = logging.getLogger(__name__)
+        self.progress_callback = progress_callback
+        self.status_callback = status_callback
+        self.log_callback = log_callback
+        self._stop_requested = False
+
+    def _update_progress(self, value: int):
+        if self.progress_callback:
+            self.progress_callback(value)
+
+    def _update_status(self, message: str):
+        if self.status_callback:
+            self.status_callback(message)
+        self.logger.info(message)
+
+    def _log(self, message: str):
+        if self.log_callback:
+            self.log_callback(message)
+        self.logger.debug(message)
+
+    def stop(self):
+        """Request to stop the current processing."""
+        self._stop_requested = True
+
+    def process(self, config: AudioProcessingConfig, input_type: str = "audio") -> bool:
+        """
+        Process the request based on input type and configuration.
+        
+        Args:
+            config: Configuration for processing
+            input_type: Type of input ("audio", "transcription", "translation")
             
         Returns:
-            bool: True if processing completed successfully, False otherwise
+            bool: Success status
         """
         try:
-            self.logger.info(f"Starting audio processing with mode: {config.processing_mode.value}")
-            
-            # Ensure output directory exists
-            from ..utils.common.helpers import ensure_directory_exists
+            self._stop_requested = False
             ensure_directory_exists("./Outputs")
             
-            # Sanitize the output filename to prevent issues
-            sanitized_name = sanitize_filename(os.path.splitext(os.path.basename(config.audio_file_path))[0])
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            base_file = config.audio_file_path or config.text_file_path or "dub"
+            sanitized_name = sanitize_filename(os.path.splitext(os.path.basename(base_file))[0])
             
-            # Step 1: Transcription
-            transcription_result = self._perform_transcription(
-                config.audio_file_path, 
-                config.whisper_model_path, 
-                config.source_language
-            )
-            
-            if not transcription_result:
-                self.logger.error("Transcription failed")
+            if input_type == "audio":
+                return self._process_audio_input(config, sanitized_name, timestamp)
+            elif input_type == "transcription":
+                return self._process_transcription_input(config, sanitized_name, timestamp)
+            elif input_type == "translation":
+                return self._process_translation_input(config, sanitized_name, timestamp)
+            else:
+                self._update_status(f"Error: Unknown input type {input_type}")
                 return False
                 
-            # If transcription only mode, save and exit
-            if config.processing_mode == ProcessingMode.TRANSCRIPTION_ONLY:
-                return self._save_transcription_only(transcription_result, sanitized_name, timestamp)
-                
-            # Step 2: Translation (if in dubbed translation mode)
-            if not config.target_languages:
-                self.logger.error("No target languages specified for translation mode")
-                return False
-                
-            # Save the original transcription
-            transcription_output_path = f"./Outputs/{sanitized_name}_transcription_{timestamp}.txt"
-            with open(transcription_output_path, 'w', encoding='utf-8') as f:
-                f.write(transcription_result.text)
-            self.logger.info(f"Transcription saved to: {transcription_output_path}")
-            
-            # Perform translation for each target language
-            for target_lang in config.target_languages:
-                translation_result = self._perform_translation(
-                    transcription_result.text,
-                    transcription_result.language if config.source_language == "auto" else config.source_language,
-                    target_lang,
-                    config.nllb_model_path
-                )
-                
-                if not translation_result:
-                    self.logger.error(f"Translation to {target_lang} failed")
-                    continue
-                    
-                # Step 3: Voice synthesis
-                synthesis_success = self._perform_voice_synthesis(
-                    translation_result.translated_text,
-                    config.ref_audio_path,
-                    target_lang,
-                    config.xtts_model_path,
-                    sanitized_name,
-                    timestamp
-                )
-                
-                if not synthesis_success:
-                    self.logger.error(f"Voice synthesis for {target_lang} failed")
-                    continue
-                    
-            return True
-            
         except Exception as e:
-            self.logger.error(f"Error during audio processing: {str(e)}", exc_info=True)
+            self._update_status(f"Error: {str(e)}")
+            self.logger.error(f"Processing failed: {str(e)}", exc_info=True)
             return False
-    
-    def _perform_transcription(self, audio_file_path: str, model_path: str, source_language: str) -> Optional[TranscriptionResult]:
-        """
-        Perform audio transcription.
+
+    def _process_audio_input(self, config: AudioProcessingConfig, name: str, ts: str) -> bool:
+        self._update_status("Loading Whisper model...")
+        transcriber = Transcriber(config.whisper_model_path)
+        self._update_progress(10)
         
-        Args:
-            audio_file_path: Path to the audio file to transcribe
-            model_path: Path to the Whisper model
-            source_language: Source language for transcription
-            
-        Returns:
-            TranscriptionResult if successful, None otherwise
-        """
-        try:
-            self.logger.info(f"Starting transcription for: {audio_file_path}")
-            transcriber = Transcriber(model_path)
-            result_dict = transcriber.transcribe(audio_file_path, source_language if source_language != "auto" else None)
-            
-            result = TranscriptionResult(
-                text=result_dict["text"],
-                language=result_dict["language"]
-            )
-            
-            self.logger.info(f"Transcription completed. Detected language: {result.language}")
-            return result
-            
-        except Exception as e:
-            self.logger.error(f"Transcription failed: {str(e)}", exc_info=True)
-            return None
-    
-    def _perform_translation(self, text: str, source_language: str, target_language: str, model_path: str) -> Optional[TranslationResult]:
-        """
-        Perform text translation.
+        if self._stop_requested: return False
         
-        Args:
-            text: Text to translate
-            source_language: Source language code
-            target_language: Target language code
-            model_path: Path to the NLLB model
-            
-        Returns:
-            TranslationResult if successful, None otherwise
-        """
-        try:
-            self.logger.info(f"Starting translation from {source_language} to {target_language}")
-            
-            # Map language codes appropriately
-            from ..common.helpers import map_language_code
-            src_lang_for_nllb = map_language_code(source_language, to_nllb_format=True)
-            tgt_lang_for_nllb = map_language_code(target_language, to_nllb_format=True)
-            
-            translator = Translator(model_path)
-            translated_text = translator.translate(text, src_lang_for_nllb, tgt_lang_for_nllb)
-            
-            result = TranslationResult(
-                original_text=text,
-                translated_text=translated_text,
-                source_language=source_language,
-                target_language=target_language
-            )
-            
-            self.logger.info(f"Translation from {source_language} to {target_language} completed")
-            return result
-            
-        except Exception as e:
-            self.logger.error(f"Translation failed: {str(e)}", exc_info=True)
-            return None
-    
-    def _perform_voice_synthesis(self, text: str, ref_audio_path: str, language: str, model_path: str, 
-                               base_filename: str, timestamp: str) -> bool:
-        """
-        Perform voice synthesis.
+        self._update_status("Transcribing audio...")
+        transcription = transcriber.transcribe(config.audio_file_path, config.source_language)
+        text = transcription["text"]
+        detected_lang = transcription["language"]
+        self._update_progress(30)
         
-        Args:
-            text: Text to synthesize
-            ref_audio_path: Path to reference audio for voice cloning
-            language: Language for synthesis
-            model_path: Path to the XTTS model
-            base_filename: Base filename for output
-            timestamp: Timestamp for output
-            
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        try:
-            self.logger.info(f"Starting voice synthesis for language: {language}")
-            
-            # Map language code for XTTS
-            from ..common.helpers import map_language_code
-            tgt_lang_for_xtts = map_language_code(language, to_nllb_format=False)
-            
-            # Create output path
-            audio_output_path = f"./Outputs/{base_filename}_dubbed_{language}_{timestamp}.wav"
-            
-            cloner = VoiceCloner(model_path)
-            cloner.clone_voice(text, ref_audio_path, audio_output_path, tgt_lang_for_xtts)
-            
-            self.logger.info(f"Voice synthesis completed. Output saved to: {audio_output_path}")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Voice synthesis failed: {str(e)}", exc_info=True)
-            return False
-    
-    def _save_transcription_only(self, transcription_result: TranscriptionResult, base_filename: str, timestamp: str) -> bool:
-        """
-        Save transcription result in transcription-only mode.
-        
-        Args:
-            transcription_result: The transcription result to save
-            base_filename: Base filename for output
-            timestamp: Timestamp for output
-            
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        try:
-            output_path = f"./Outputs/{base_filename}_transcript_{timestamp}.txt"
-            
+        if config.processing_mode == ProcessingMode.TRANSCRIPTION_ONLY:
+            output_path = f"./Outputs/{name}_transcript_{ts}.txt"
             with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(transcription_result.text)
-                
-            self.logger.info(f"Transcription-only result saved to: {output_path}")
+                f.write(text)
+            self._update_status(f"Transcription saved to {output_path}")
+            self._update_progress(100)
             return True
+
+        # For dubbed translation, we need to clean the text and translate
+        cleaned_text = self._clean_transcription(text)
+        src_lang = detected_lang if config.source_language == "auto" else config.source_language
+        
+        return self._translate_and_dub(config, cleaned_text, src_lang, name, ts, start_progress=40)
+
+    def _process_transcription_input(self, config: AudioProcessingConfig, name: str, ts: str) -> bool:
+        self._update_status("Loading transcription text...")
+        with open(config.text_file_path, 'r', encoding='utf-8') as f:
+            text = f.read()
+        self._update_progress(20)
+        
+        src_lang = config.source_language if config.source_language != "auto" else "eng_Latn"
+        return self._translate_and_dub(config, text, src_lang, name, ts, start_progress=40)
+
+    def _process_translation_input(self, config: AudioProcessingConfig, name: str, ts: str) -> bool:
+        self._update_status("Loading translation text...")
+        with open(config.text_file_path, 'r', encoding='utf-8') as f:
+            text = f.read()
+        self._update_progress(20)
+        
+        target_lang = config.target_languages[0] if config.target_languages else "eng_Latn"
+        return self._dub_only(config, text, target_lang, name, ts)
+
+    def _translate_and_dub(self, config: AudioProcessingConfig, text: str, src_lang: str, 
+                           name: str, ts: str, start_progress: int) -> bool:
+        self._update_status("Loading NLLB translator...")
+        translator = Translator(config.nllb_model_path)
+        
+        num_langs = len(config.target_languages)
+        progress_per_lang = (100 - start_progress) // num_langs if num_langs > 0 else 0
+        
+        cloner = None
+        
+        for i, tgt_lang in enumerate(config.target_languages):
+            if self._stop_requested: return False
             
-        except Exception as e:
-            self.logger.error(f"Failed to save transcription: {str(e)}", exc_info=True)
-            return False
+            self._update_status(f"Translating to {tgt_lang}...")
+            src_nllb = map_language_code(src_lang, to_nllb_format=True)
+            tgt_nllb = map_language_code(tgt_lang, to_nllb_format=True)
+            
+            translated = translator.translate(text, src_nllb, tgt_nllb)
+            
+            # Save translation
+            txt_out = f"./Outputs/{name}_translation_{tgt_lang}_{ts}.txt"
+            with open(txt_out, 'w', encoding='utf-8') as f:
+                f.write(translated)
+            
+            if self._stop_requested: return False
+            
+            self._update_status(f"Generating audio for {tgt_lang}...")
+            if cloner is None:
+                cloner = VoiceCloner(config.xtts_model_path)
+            
+            audio_out = f"./Outputs/{name}_dubbed_{tgt_lang}_{ts}.wav"
+            tgt_xtts = map_language_code(tgt_lang, to_nllb_format=False)
+            cloner.clone_voice(translated, config.ref_audio_path, audio_out, tgt_xtts)
+            
+            self._update_progress(start_progress + (i + 1) * progress_per_lang)
+            
+        self._update_status("Processing completed successfully!")
+        self._update_progress(100)
+        return True
+
+    def _dub_only(self, config: AudioProcessingConfig, text: str, tgt_lang: str, name: str, ts: str) -> bool:
+        self._update_status("Loading XTTS model...")
+        cloner = VoiceCloner(config.xtts_model_path)
+        self._update_progress(50)
+        
+        if self._stop_requested: return False
+        
+        self._update_status(f"Generating audio for {tgt_lang}...")
+        audio_out = f"./Outputs/{name}_dubbed_{tgt_lang}_{ts}.wav"
+        tgt_xtts = map_language_code(tgt_lang, to_nllb_format=False)
+        cloner.clone_voice(text, config.ref_audio_path, audio_out, tgt_xtts)
+        
+        self._update_status(f"Audio saved to {audio_out}")
+        self._update_progress(100)
+        return True
+
+    def _clean_transcription(self, raw_text: str) -> str:
+        """Extract plain text from Whisper output (removing timestamps)."""
+        lines = raw_text.split('\n')
+        text_parts = []
+        seen_words = set()
+
+        for line in lines:
+            line = line.strip()
+            if '-->' in line and '] ' in line:
+                parts = line.split('] ', 1)
+                if len(parts) > 1:
+                    text_part = parts[1].strip()
+                    if text_part and not text_part.startswith('['):
+                        words = text_part.split()
+                        unique_words = [w for w in words if w.lower() not in seen_words]
+                        for w in unique_words: seen_words.add(w.lower())
+                        if unique_words:
+                            text_parts.append(' '.join(unique_words))
+        
+        cleaned = ' '.join(text_parts).strip()
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        return cleaned if cleaned else raw_text

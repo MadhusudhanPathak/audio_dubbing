@@ -9,51 +9,6 @@ import logging
 from src.utils.common.app_config import get_config
 
 
-def scan_model_files(directory: str, extension: Union[str, List[str]] = ".pt") -> List[str]:
-    """
-    Scan a directory for model files with a specific extension.
-
-    Args:
-        directory: Directory path to scan
-        extension: File extension(s) to look for (default: ".pt")
-
-    Returns:
-        List of model file paths
-
-    Raises:
-        ValueError: If directory is not a string or extension is invalid
-    """
-    if not directory or not isinstance(directory, str):
-        raise ValueError("Directory must be a non-empty string")
-
-    if not extension or (not isinstance(extension, str) and not isinstance(extension, list)):
-        raise ValueError("Extension must be a string or list of strings")
-
-    if not os.path.exists(directory):
-        logging.warning(f"Directory does not exist: {directory}")
-        return []
-
-    try:
-        files = []
-        # Handle multiple extensions if extension is a list
-        if isinstance(extension, list):
-            for ext in extension:
-                if not isinstance(ext, str):
-                    logging.warning(f"Skipping invalid extension: {ext}")
-                    continue
-                pattern = os.path.join(directory, f"*{ext}")
-                files.extend(glob.glob(pattern))
-        else:
-            pattern = os.path.join(directory, f"*{extension}")
-            files = glob.glob(pattern)
-
-        logging.info(f"Found {len(files)} model files in {directory}")
-        return files
-    except Exception as e:
-        logging.error(f"Error scanning directory {directory}: {str(e)}")
-        return []
-
-
 def validate_audio_file(file_path: str) -> bool:
     """
     Validate if the given file is a valid audio file.
@@ -441,43 +396,38 @@ def map_language_code(lang_name: str, to_nllb_format: bool = True) -> str:
 def language_code_to_number(lang_code: str) -> int:
     """
     Convert language code to a numeric identifier.
-
-    Args:
-        lang_code: Language code (e.g., 'eng_Latn', 'hin_Deva', 'jpn_Jpan')
-
-    Returns:
-        Numeric identifier for the language (hash of the code)
+    Used for UI components that require integer IDs.
     """
     if not lang_code:
         return 0
-    # Use hash of the code to generate a consistent numeric identifier
-    # This works for all languages, not just the hardcoded ones
-    return hash(lang_code) % (2**31)
+    
+    # Use a deterministic mapping for known languages
+    languages = get_nllb_languages()
+    sorted_codes = sorted(languages.values())
+    
+    try:
+        return sorted_codes.index(lang_code) + 1
+    except ValueError:
+        # Stable fallback for unknown codes
+        import hashlib
+        return int(hashlib.md5(lang_code.encode()).hexdigest(), 16) % (2**31)
 
 
 def number_to_language_code(lang_number: int) -> str:
     """
     Convert numeric identifier back to language code.
-    
-    Note: This is a reverse operation that works by checking against all known NLLB languages.
-    If the number doesn't match any known language, defaults to English.
-
-    Args:
-        lang_number: Numeric identifier for the language
-
-    Returns:
-        Language code (e.g., 'eng_Latn', 'hin_Deva')
     """
-    if lang_number == 0:
-        return 'eng_Latn'  # Default to English
+    if lang_number <= 0:
+        return 'eng_Latn'
     
-    # Get all NLLB languages and find matching number
-    nllb_languages = get_nllb_languages()
-    for lang_code in nllb_languages.values():
-        if language_code_to_number(lang_code) == lang_number:
-            return lang_code
+    languages = get_nllb_languages()
+    sorted_codes = sorted(languages.values())
     
-    return 'eng_Latn'  # Default to English if not found
+    if 1 <= lang_number <= len(sorted_codes):
+        return sorted_codes[lang_number - 1]
+    
+    return 'eng_Latn'
+
 
 
 def ensure_directory_exists(path: str) -> None:

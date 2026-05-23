@@ -14,6 +14,9 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 
+from src.core.services.model_manager import ModelManager
+
+
 class ModelInfoDialog(QDialog):
     """Modal dialog showing required model downloads with local availability check."""
 
@@ -52,7 +55,7 @@ class ModelInfoDialog(QDialog):
         whisper_info.setWordWrap(True)
         grid_layout.addWidget(whisper_info, 0, 1)
 
-        whisper_available = self.check_whisper_models()
+        whisper_available = bool(ModelManager.scan_whisper_models())
         self.whisper_checkbox = QCheckBox("Available locally")
         self.whisper_checkbox.setChecked(whisper_available)
         grid_layout.addWidget(self.whisper_checkbox, 0, 2)
@@ -74,7 +77,7 @@ class ModelInfoDialog(QDialog):
         nllb_info.setWordWrap(True)
         grid_layout.addWidget(nllb_info, 1, 1)
 
-        nllb_available = self.check_nllb_models()
+        nllb_available = bool(ModelManager.scan_nllb_models())
         self.nllb_checkbox = QCheckBox("Available locally")
         self.nllb_checkbox.setChecked(nllb_available)
         grid_layout.addWidget(self.nllb_checkbox, 1, 2)
@@ -96,7 +99,7 @@ class ModelInfoDialog(QDialog):
         xtts_info.setWordWrap(True)
         grid_layout.addWidget(xtts_info, 2, 1)
 
-        xtts_available = self.check_xtts_models()
+        xtts_available = bool(ModelManager.scan_xtts_models())
         self.xtts_checkbox = QCheckBox("Available locally")
         self.xtts_checkbox.setChecked(xtts_available)
         grid_layout.addWidget(self.xtts_checkbox, 2, 2)
@@ -110,115 +113,9 @@ class ModelInfoDialog(QDialog):
 
         self.setLayout(layout)
 
-    @staticmethod
-    def check_whisper_models() -> bool:
-        """
-        Check if Whisper models are available locally.
-
-        Returns:
-            True if models are found, False otherwise
-        """
-        whisper_dir = "./Models/whisper"
-        if not os.path.exists(whisper_dir):
-            return False
-
-        whisper_extensions = ['.bin', '.gguf']
-        try:
-            for file in os.listdir(whisper_dir):
-                if any(file.lower().endswith(ext) for ext in whisper_extensions):
-                    return True
-        except OSError as e:
-            logging.warning(f"Error checking whisper models: {e}")
-        return False
-
-    @staticmethod
-    def check_nllb_models() -> bool:
-        """
-        Check if NLLB models are available locally.
-
-        Returns:
-            True if models are found, False otherwise
-        """
-        nllb_dir = "./Models/nllb"
-        if not os.path.exists(nllb_dir):
-            return False
-
-        nllb_required_files = ['config.json', 'pytorch_model.bin', 'tokenizer.json', 'generation_config.json']
-
-        try:
-            # Check for required files directly in the directory
-            direct_files_count = sum(
-                1 for file in nllb_required_files
-                if os.path.exists(os.path.join(nllb_dir, file))
-            )
-            if direct_files_count >= 1 and os.path.exists(os.path.join(nllb_dir, 'pytorch_model.bin')):
-                return True
-            elif direct_files_count >= 2:
-                return True
-
-            # Check for model files in subdirectories
-            for item in os.listdir(nllb_dir):
-                item_path = os.path.join(nllb_dir, item)
-                if not os.path.isdir(item_path):
-                    continue
-
-                model_files_count = sum(
-                    1 for file in nllb_required_files
-                    if os.path.exists(os.path.join(item_path, file))
-                )
-                if model_files_count >= 1 and os.path.exists(os.path.join(item_path, 'pytorch_model.bin')):
-                    return True
-                elif model_files_count >= 2:
-                    return True
-        except OSError as e:
-            logging.warning(f"Error checking NLLB models: {e}")
-        return False
-
-    @staticmethod
-    def check_xtts_models() -> bool:
-        """
-        Check if XTTS models are available locally.
-
-        Returns:
-            True if models are found, False otherwise
-        """
-        xtts_dir = "./Models/xtts"
-        if not os.path.exists(xtts_dir):
-            return False
-
-        xtts_required_files = ['config.json', 'model.pth', 'vocab.json', 'speakers.pth', 'language_ids.json']
-
-        try:
-            # Check for required files directly in the directory
-            direct_files_count = sum(
-                1 for file in xtts_required_files
-                if os.path.exists(os.path.join(xtts_dir, file))
-            )
-            if direct_files_count >= 1 and os.path.exists(os.path.join(xtts_dir, 'model.pth')):
-                return True
-            elif direct_files_count >= 2:
-                return True
-
-            # Check for model files in subdirectories
-            for item in os.listdir(xtts_dir):
-                item_path = os.path.join(xtts_dir, item)
-                if not os.path.isdir(item_path):
-                    continue
-
-                model_files_count = sum(
-                    1 for file in xtts_required_files
-                    if os.path.exists(os.path.join(item_path, file))
-                )
-                if model_files_count >= 1 and os.path.exists(os.path.join(item_path, 'model.pth')):
-                    return True
-                elif model_files_count >= 2:
-                    return True
-        except OSError as e:
-            logging.warning(f"Error checking XTTS models: {e}")
-        return False
-
     def refresh_model_status(self):
         """Refresh the status of all model availability checks."""
-        self.whisper_checkbox.setChecked(self.check_whisper_models())
-        self.nllb_checkbox.setChecked(self.check_nllb_models())
-        self.xtts_checkbox.setChecked(self.check_xtts_models())
+        self.whisper_checkbox.setChecked(bool(ModelManager.scan_whisper_models()))
+        self.nllb_checkbox.setChecked(bool(ModelManager.scan_nllb_models()))
+        self.xtts_checkbox.setChecked(bool(ModelManager.scan_xtts_models()))
+

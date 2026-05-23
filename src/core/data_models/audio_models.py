@@ -18,7 +18,8 @@ class ProcessingMode(Enum):
 @dataclass
 class AudioProcessingConfig:
     """Configuration for audio processing operations."""
-    audio_file_path: str
+    audio_file_path: Optional[str] = None
+    text_file_path: Optional[str] = None
     ref_audio_path: Optional[str] = None
     whisper_model_path: Optional[str] = None
     nllb_model_path: Optional[str] = None

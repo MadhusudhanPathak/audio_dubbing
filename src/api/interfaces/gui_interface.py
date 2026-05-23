@@ -1,28 +1,23 @@
 import sys
 import logging
+import os
+from datetime import datetime
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QComboBox, QProgressBar, QTextEdit,
-    QFileDialog, QMessageBox, QDialog, QGridLayout, QGroupBox, QCheckBox,
-    QScrollArea
+    QFileDialog, QMessageBox, QGroupBox, QGridLayout
 )
 from PyQt5.QtGui import QFont, QPalette, QColor
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-import os
-from datetime import datetime
-# Add the project root to the path to allow imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from src.core.services.transcription_service import Transcriber
-from src.core.services.translation_service import Translator
-from src.core.services.voice_synthesis_service import VoiceCloner
 from src.utils.common.helpers import (
-    scan_model_files, validate_audio_file, validate_reference_audio_duration,
-    map_language_code, language_code_to_number, number_to_language_code,
-    ensure_directory_exists, get_supported_audio_formats, sanitize_filename
+    validate_audio_file, validate_reference_audio_duration,
+    get_supported_audio_formats
 )
-from src.utils.common.app_config import get_config
 from src.api.interfaces.dialogs import ModelInfoDialog
+from src.core.services.model_manager import ModelManager
+from src.core.application.audio_orchestrator import AudioDubbingOrchestrator
+from src.core.data_models.audio_models import AudioProcessingConfig, ProcessingMode
 
 
 class MainWindow(QMainWindow):
@@ -60,7 +55,7 @@ class MainWindow(QMainWindow):
         self.init_ui()
 
         # Check if all models are available and conditionally show model info dialog
-        if not self.all_models_available():
+        if not ModelManager.all_models_available():
             self.show_model_info_dialog()
     
     def center_window(self):
@@ -71,87 +66,8 @@ class MainWindow(QMainWindow):
         self.move(qr.topLeft())
 
     def all_models_available(self):
-        """Check if all required models are available locally"""
-        # Check for Whisper models
-        whisper_available = False
-        whisper_dir = "./Models/whisper"
-        if os.path.exists(whisper_dir):
-            # Look for common Whisper model extensions in the whisper directory
-            whisper_extensions = ['.bin', '.gguf']
-            for file in os.listdir(whisper_dir):
-                if any(file.lower().endswith(ext) for ext in whisper_extensions):
-                    whisper_available = True
-                    break
-
-        # Check for NLLB models
-        nllb_available = False
-        nllb_dir = "./Models/nllb"
-        if os.path.exists(nllb_dir):
-            # First check if required files exist directly in the nllb directory
-            nllb_required_files = ['config.json', 'pytorch_model.bin', 'tokenizer.json', 'generation_config.json']
-            direct_files_count = 0
-            for required_file in nllb_required_files:
-                if os.path.exists(os.path.join(nllb_dir, required_file)):
-                    direct_files_count += 1
-            # If pytorch_model.bin is present or at least 2 required files exist, consider it valid
-            if direct_files_count >= 1 and os.path.exists(os.path.join(nllb_dir, 'pytorch_model.bin')):
-                nllb_available = True
-            elif direct_files_count >= 2:
-                nllb_available = True
-            
-            # Also check for directories in the nllb directory that contain model files
-            if not nllb_available:
-                for item in os.listdir(nllb_dir):
-                    item_path = os.path.join(nllb_dir, item)
-                    if os.path.isdir(item_path):
-                        # Check if directory contains common NLLB model files
-                        model_files_count = 0
-                        for required_file in nllb_required_files:
-                            if os.path.exists(os.path.join(item_path, required_file)):
-                                model_files_count += 1
-                        # If pytorch_model.bin is present or at least 2 required files exist, consider it valid
-                        if model_files_count >= 1 and os.path.exists(os.path.join(item_path, 'pytorch_model.bin')):
-                            nllb_available = True
-                            break
-                        elif model_files_count >= 2:
-                            nllb_available = True
-                            break
-
-        # Check for XTTS models
-        xtts_available = False
-        xtts_dir = "./Models/xtts"
-        if os.path.exists(xtts_dir):
-            # First check if required files exist directly in the xtts directory
-            xtts_required_files = ['config.json', 'model.pth', 'vocab.json', 'speakers.pth', 'language_ids.json']
-            direct_files_count = 0
-            for required_file in xtts_required_files:
-                if os.path.exists(os.path.join(xtts_dir, required_file)):
-                    direct_files_count += 1
-            # If model.pth is present or at least 2 required files exist, consider it valid
-            if direct_files_count >= 1 and os.path.exists(os.path.join(xtts_dir, 'model.pth')):
-                xtts_available = True
-            elif direct_files_count >= 2:
-                xtts_available = True
-            
-            # Also check for directories in the xtts directory that contain model files
-            if not xtts_available:
-                for item in os.listdir(xtts_dir):
-                    item_path = os.path.join(xtts_dir, item)
-                    if os.path.isdir(item_path):
-                        # Check if directory contains common XTTS model files
-                        model_files_count = 0
-                        for required_file in xtts_required_files:
-                            if os.path.exists(os.path.join(item_path, required_file)):
-                                model_files_count += 1
-                        # If model.pth is present or at least 2 required files exist, consider it valid
-                        if model_files_count >= 1 and os.path.exists(os.path.join(item_path, 'model.pth')):
-                            xtts_available = True
-                            break
-                        elif model_files_count >= 2:
-                            xtts_available = True
-                            break
-
-        return whisper_available and nllb_available and xtts_available
+        """Legacy check for backward compatibility, now using ModelManager."""
+        return ModelManager.all_models_available()
 
     def show_model_info_dialog(self):
         """Show the model info dialog"""
@@ -378,20 +294,13 @@ class MainWindow(QMainWindow):
         """Refresh Whisper model dropdown"""
         try:
             self.whisper_combo.clear()
-            
-            # Look for both .bin and .gguf files in the whisper directory
-            whisper_dir = "./Models/whisper"
-            if os.path.exists(whisper_dir):
-                # Look for both .bin and .gguf files
-                all_models = scan_model_files(whisper_dir, [".bin", ".gguf"])
-                
-                for model in all_models:
-                    model_name = os.path.basename(model)
-                    self.whisper_combo.addItem(model_name, model)
+            models = ModelManager.scan_whisper_models()
+            for model in models:
+                self.whisper_combo.addItem(model["name"], model["path"])
 
             if self.whisper_combo.count() == 0:
                 self.whisper_combo.addItem("No models found", "")
-                logging.warning("No Whisper models found in Models/whisper directory")
+                logging.warning("No Whisper models found")
             else:
                 logging.info(f"Loaded {self.whisper_combo.count()} Whisper models")
         except Exception as e:
@@ -404,46 +313,15 @@ class MainWindow(QMainWindow):
         """Refresh NLLB model dropdown"""
         try:
             self.nllb_combo.clear()
-            nllb_dir = "./Models/nllb"
-            
-            # Check if the main NLLB directory itself contains model files
-            nllb_main_valid = False
-            if os.path.exists(nllb_dir):
-                nllb_required_files = ['config.json', 'pytorch_model.bin', 'tokenizer.json', 'generation_config.json']
-                direct_files_count = 0
-                for required_file in nllb_required_files:
-                    if os.path.exists(os.path.join(nllb_dir, required_file)):
-                        direct_files_count += 1
-                
-                # If pytorch_model.bin is present or at least 2 required files exist, consider main directory as valid
-                if direct_files_count >= 1 and os.path.exists(os.path.join(nllb_dir, 'pytorch_model.bin')):
-                    self.nllb_combo.addItem("NLLB Model", nllb_dir)
-                    nllb_main_valid = True
-                elif direct_files_count >= 2:
-                    self.nllb_combo.addItem("NLLB Model", nllb_dir)
-                    nllb_main_valid = True
-                
-                # Also look for subdirectories that contain model files
-                for item in os.listdir(nllb_dir):
-                    item_path = os.path.join(nllb_dir, item)
-                    if os.path.isdir(item_path):
-                        # Check if directory contains common NLLB model files
-                        model_files_count = 0
-                        for required_file in nllb_required_files:
-                            if os.path.exists(os.path.join(item_path, required_file)):
-                                model_files_count += 1
-                        
-                        # If pytorch_model.bin is present or at least 2 required files exist, add to combo
-                        if model_files_count >= 1 and os.path.exists(os.path.join(item_path, 'pytorch_model.bin')):
-                            self.nllb_combo.addItem(item, item_path)
-                        elif model_files_count >= 2:
-                            self.nllb_combo.addItem(item, item_path)
+            models = ModelManager.scan_nllb_models()
+            for model in models:
+                self.nllb_combo.addItem(model["name"], model["path"])
             
             if self.nllb_combo.count() == 0:
                 self.nllb_combo.addItem("No models found", "")
-                logging.warning("No NLLB models found in Models/nllb directory")
+                logging.warning("No NLLB models found")
             else:
-                logging.info(f"Loaded {self.nllb_combo.count()} NLLB model(s) from {nllb_dir}")
+                logging.info(f"Loaded {self.nllb_combo.count()} NLLB model(s)")
         except Exception as e:
             logging.error(f"Error refreshing NLLB models: {str(e)}")
             self.nllb_combo.clear()
@@ -454,46 +332,15 @@ class MainWindow(QMainWindow):
         """Refresh XTTS model dropdown"""
         try:
             self.xtts_combo.clear()
-            xtts_dir = "./Models/xtts"
-            
-            # Check if the main XTTS directory itself contains model files
-            xtts_main_valid = False
-            if os.path.exists(xtts_dir):
-                xtts_required_files = ['config.json', 'model.pth', 'vocab.json', 'speakers.pth', 'language_ids.json']
-                direct_files_count = 0
-                for required_file in xtts_required_files:
-                    if os.path.exists(os.path.join(xtts_dir, required_file)):
-                        direct_files_count += 1
-                
-                # If model.pth is present or at least 2 required files exist, consider main directory as valid
-                if direct_files_count >= 1 and os.path.exists(os.path.join(xtts_dir, 'model.pth')):
-                    self.xtts_combo.addItem("XTTS Model", xtts_dir)
-                    xtts_main_valid = True
-                elif direct_files_count >= 2:
-                    self.xtts_combo.addItem("XTTS Model", xtts_dir)
-                    xtts_main_valid = True
-                
-                # Also look for subdirectories that contain model files
-                for item in os.listdir(xtts_dir):
-                    item_path = os.path.join(xtts_dir, item)
-                    if os.path.isdir(item_path):
-                        # Check if directory contains common XTTS model files
-                        model_files_count = 0
-                        for required_file in xtts_required_files:
-                            if os.path.exists(os.path.join(item_path, required_file)):
-                                model_files_count += 1
-                        
-                        # If model.pth is present or at least 2 required files exist, add to combo
-                        if model_files_count >= 1 and os.path.exists(os.path.join(item_path, 'model.pth')):
-                            self.xtts_combo.addItem(item, item_path)
-                        elif model_files_count >= 2:
-                            self.xtts_combo.addItem(item, item_path)
+            models = ModelManager.scan_xtts_models()
+            for model in models:
+                self.xtts_combo.addItem(model["name"], model["path"])
             
             if self.xtts_combo.count() == 0:
                 self.xtts_combo.addItem("No models found", "")
-                logging.warning("No XTTS models found in Models/xtts directory")
+                logging.warning("No XTTS models found")
             else:
-                logging.info(f"Loaded {self.xtts_combo.count()} XTTS model(s) from {xtts_dir}")
+                logging.info(f"Loaded {self.xtts_combo.count()} XTTS model(s)")
         except Exception as e:
             logging.error(f"Error refreshing XTTS models: {str(e)}")
             self.xtts_combo.clear()
@@ -636,122 +483,44 @@ class MainWindow(QMainWindow):
         errors = []
 
         try:
-            # Check if reference audio is always required
+            # Reference audio validation
             if not self.ref_audio_path:
-                errors.append("Please select a reference audio file for voice cloning")
-            elif not os.path.exists(self.ref_audio_path):
-                errors.append("Selected reference audio file does not exist")
+                errors.append("Please select a reference audio file")
             elif not validate_audio_file(self.ref_audio_path):
                 errors.append("Selected reference audio file is invalid")
             else:
-                is_valid, duration, msg = validate_reference_audio_duration(self.ref_audio_path)
-                if not is_valid:
-                    errors.append(msg)
+                is_valid, _, msg = validate_reference_audio_duration(self.ref_audio_path)
+                if not is_valid: errors.append(msg)
 
-            # Validate based on input type
+            # Input validation based on type
             if input_type == "audio":
-                # For audio input, validate audio file and models
-                if not self.audio_file_path:
-                    errors.append("Please select an audio file")
-                elif not os.path.exists(self.audio_file_path):
-                    errors.append("Selected audio file does not exist")
-                elif not validate_audio_file(self.audio_file_path):
-                    errors.append("Selected audio file is invalid")
-
-                # Validate transcription model
-                if self.whisper_combo.currentData() == "":
+                if not self.audio_file_path or not validate_audio_file(self.audio_file_path):
+                    errors.append("Invalid or missing audio file")
+                
+                if not self.whisper_combo.currentData():
                     errors.append("Please select a Transcription model")
-                elif not os.path.exists(self.whisper_combo.currentData()):
-                    errors.append("Selected Transcription model file does not exist")
+            else:
+                if not self.text_file_path or not os.path.exists(self.text_file_path):
+                    errors.append("Invalid or missing text file")
 
-                # Validate translation model if output mode is translation
-                if output_mode == "translation":
-                    if self.nllb_combo.currentData() == "":
-                        errors.append("Please select a Translation model")
-                    elif not os.path.exists(self.nllb_combo.currentData()):
-                        errors.append("Selected Translation model directory does not exist")
-                    else:
-                        # Validate that the selected NLLB directory has required model files
-                        nllb_required_files = ['config.json', 'pytorch_model.bin', 'tokenizer.json', 'generation_config.json']
-                        required_found = 0
-                        for required_file in nllb_required_files:
-                            if os.path.exists(os.path.join(self.nllb_combo.currentData(), required_file)):
-                                required_found += 1
+            # Model validation
+            if output_mode == "translation":
+                if input_type != "translation" and not ModelManager.validate_nllb_directory(self.nllb_combo.currentData()):
+                    errors.append("Invalid Translation model directory")
+                
+                if not ModelManager.validate_xtts_directory(self.xtts_combo.currentData()):
+                    errors.append("Invalid Narration model directory")
 
-                        # Check if pytorch_model.bin exists (key file) or at least 2 required files exist
-                        if required_found < 1 or (required_found < 2 and not os.path.exists(os.path.join(self.nllb_combo.currentData(), 'pytorch_model.bin'))):
-                            errors.append("Selected Translation model directory is missing required model files (config.json, pytorch_model.bin, etc.)")
+                if input_type in ["audio", "transcription"] and not self.get_selected_target_languages():
+                    errors.append("Please select at least one target language")
 
-            elif input_type in ["transcription", "translation"]:
-                # For text input, validate text file
-                if not self.text_file_path:
-                    errors.append("Please select a text file")
-                elif not os.path.exists(self.text_file_path):
-                    errors.append("Selected text file does not exist")
-                else:
-                    # Check if it's a valid text file
-                    try:
-                        with open(self.text_file_path, 'r', encoding='utf-8') as f:
-                            f.read(100)  # Try to read first 100 characters
-                    except (IOError, OSError) as e:
-                        logging.error(f"Failed to validate text file: {e}")
-                        errors.append("Selected file is not a valid text file")
-
-                # Validate models based on input and output type
-                if input_type == "transcription" and output_mode == "translation":
-                    # Need translation model to translate the transcription
-                    if self.nllb_combo.currentData() == "":
-                        errors.append("Please select a Translation model")
-                    elif not os.path.exists(self.nllb_combo.currentData()):
-                        errors.append("Selected Translation model directory does not exist")
-                    else:
-                        # Validate that the selected NLLB directory has required model files
-                        nllb_required_files = ['config.json', 'pytorch_model.bin', 'tokenizer.json', 'generation_config.json']
-                        required_found = 0
-                        for required_file in nllb_required_files:
-                            if os.path.exists(os.path.join(self.nllb_combo.currentData(), required_file)):
-                                required_found += 1
-
-                        # Check if pytorch_model.bin exists (key file) or at least 2 required files exist
-                        if required_found < 1 or (required_found < 2 and not os.path.exists(os.path.join(self.nllb_combo.currentData(), 'pytorch_model.bin'))):
-                            errors.append("Selected Translation model directory is missing required model files (config.json, pytorch_model.bin, etc.)")
-
-            # Validate XTTS model if output mode requires audio generation
-            if output_mode == "translation":  # Both transcription and translation modes may need XTTS for audio
-                if self.xtts_combo.currentData() == "":
-                    errors.append("Please select a Narration model")
-                elif not os.path.exists(self.xtts_combo.currentData()):
-                    errors.append("Selected Narration model directory does not exist")
-                else:
-                    # Validate that the selected XTTS directory has required model files
-                    xtts_required_files = ['config.json', 'model.pth', 'vocab.json', 'speakers.pth', 'language_ids.json']
-                    required_found = 0
-                    for required_file in xtts_required_files:
-                        if os.path.exists(os.path.join(self.xtts_combo.currentData(), required_file)):
-                            required_found += 1
-
-                    # Check if model.pth exists (key file) or at least 2 required files exist
-                    if required_found < 1 or (required_found < 2 and not os.path.exists(os.path.join(self.xtts_combo.currentData(), 'model.pth'))):
-                        errors.append("Selected Narration model directory is missing required model files (config.json, model.pth, etc.)")
-
-            # Validate target languages for translation output mode
-            if output_mode == "translation" and input_type in ["audio", "transcription"]:
-                selected_target_languages = self.get_selected_target_languages()
-                if not selected_target_languages:
-                    errors.append("Please select at least one target language for translation")
-
-            # Show errors if any
             if errors:
-                error_msg = "\n".join(errors)
-                logging.error(f"Input validation failed: {error_msg}")
-                QMessageBox.critical(self, "Validation Error", f"The following errors occurred:\n\n{error_msg}")
+                QMessageBox.critical(self, "Validation Error", "\n".join(errors))
                 return False
 
-            logging.info("Input validation passed")
             return True
         except Exception as e:
-            logging.error(f"Error during input validation: {str(e)}")
-            QMessageBox.critical(self, "Validation Error", f"An error occurred during validation: {str(e)}")
+            logging.error(f"Validation error: {e}")
             return False
     
     def update_progress(self, value):
@@ -778,6 +547,10 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", message)
 
 
+from src.core.application.audio_orchestrator import AudioDubbingOrchestrator
+from src.core.data_models.audio_models import AudioProcessingConfig, ProcessingMode
+
+
 class ProcessingThread(QThread):
     """Thread for processing audio to keep UI responsive"""
     progress_updated = pyqtSignal(int)
@@ -788,494 +561,36 @@ class ProcessingThread(QThread):
     def __init__(self, audio_file, text_file, ref_audio, whisper_model, nllb_model, xtts_model,
                  src_lang, tgt_lang_list, input_type, output_mode):
         super().__init__()
-        self.audio_file = audio_file
-        self.text_file = text_file
-        self.ref_audio = ref_audio
-        self.whisper_model = whisper_model
-        self.nllb_model = nllb_model
-        self.xtts_model = xtts_model
-        self.src_lang = src_lang
-        self.tgt_lang_list = tgt_lang_list  # List of target languages
-        self.input_type = input_type  # "audio", "transcription", or "translation"
-        self.output_mode = output_mode  # "transcript" or "translation"
-        self._stop_flag = False
+        self.config = AudioProcessingConfig(
+            audio_file_path=audio_file,
+            text_file_path=text_file,
+            ref_audio_path=ref_audio,
+            whisper_model_path=whisper_model,
+            nllb_model_path=nllb_model,
+            xtts_model_path=xtts_model,
+            source_language=src_lang,
+            target_languages=tgt_lang_list,
+            processing_mode=ProcessingMode.TRANSCRIPTION_ONLY if output_mode == "transcript" else ProcessingMode.DUBBED_TRANSLATION
+        )
+        self.input_type = input_type
+        self.orchestrator = AudioDubbingOrchestrator(
+            progress_callback=self.progress_updated.emit,
+            status_callback=self.status_updated.emit,
+            log_callback=self.log_updated.emit
+        )
 
     def stop(self):
         """Set the stop flag to terminate processing"""
-        self._stop_flag = True
+        self.orchestrator.stop()
 
     def run(self):
         """Main processing logic"""
-        try:
-            logging.info(f"Starting {self.input_type} input with {self.output_mode} output processing thread")
-            # Ensure output directory exists
-            ensure_directory_exists("./Outputs")
+        success = self.orchestrator.process(self.config, self.input_type)
+        if success:
+            self.processing_finished.emit(True, "Processing completed successfully!")
+        else:
+            self.processing_finished.emit(False, "Processing failed or was stopped.")
 
-            # Sanitize the output filename to prevent issues
-            if self.audio_file:
-                sanitized_name = sanitize_filename(os.path.splitext(os.path.basename(self.audio_file))[0])
-            elif self.text_file:
-                sanitized_name = sanitize_filename(os.path.splitext(os.path.basename(self.text_file))[0])
-            else:
-                sanitized_name = "default"
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-            # Handle the different combinations of input and output modes
-            if self.input_type == "audio" and self.output_mode == "transcript":
-                # Audio input -> Transcription output
-                self.status_updated.emit("Loading Whisper model...")
-                self.log_updated.emit("Loading Whisper model...")
-
-                if self._stop_flag:
-                    logging.info("Processing stopped by user")
-                    self.processing_finished.emit(False, "Processing stopped by user")
-                    return
-
-                # Initialize transcriber
-                self.log_updated.emit(f"Initializing Whisper model: {self.whisper_model}")
-                logging.debug(f"Whisper model path: {self.whisper_model}")
-                transcriber = Transcriber(self.whisper_model)
-
-                if self._stop_flag:
-                    logging.info("Processing stopped by user")
-                    self.processing_finished.emit(False, "Processing stopped by user")
-                    return
-
-                self.status_updated.emit("Transcribing audio...")
-                self.log_updated.emit("Starting transcription...")
-                self.progress_updated.emit(20)
-
-                # Transcribe audio
-                self.log_updated.emit(f"Transcribing audio file: {self.audio_file}")
-                logging.debug(f"Audio file path: {self.audio_file}, Source language: {self.src_lang}")
-                transcription_result = transcriber.transcribe(self.audio_file, self.src_lang if self.src_lang != "auto" else None)
-                transcribed_text = transcription_result["text"]
-                detected_language = transcription_result["language"]
-
-                self.log_updated.emit(f"Transcription completed. Detected language: {detected_language}")
-                logging.debug(f"Transcribed text length: {len(transcribed_text)} characters")
-
-                # Save transcription
-                output_path = f"./Outputs/{sanitized_name}_transcript_{timestamp}.txt"
-                self.log_updated.emit(f"Saving transcription to: {output_path}")
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(transcribed_text)
-
-                self.log_updated.emit(f"Transcription saved to: {output_path}")
-                self.status_updated.emit("Transcription completed successfully!")
-                self.progress_updated.emit(100)
-                self.processing_finished.emit(True, f"Transcription saved to: {output_path}")
-                logging.info(f"Transcription saved to: {output_path}")
-                return
-
-            elif self.input_type == "audio" and self.output_mode == "translation":
-                # Audio input -> Translation output (full workflow: transcribe, translate, dub)
-                self.status_updated.emit("Loading Whisper model...")
-                self.log_updated.emit("Loading Whisper model...")
-
-                if self._stop_flag:
-                    logging.info("Processing stopped by user")
-                    self.processing_finished.emit(False, "Processing stopped by user")
-                    return
-
-                # Initialize transcriber
-                self.log_updated.emit(f"Initializing Whisper model: {self.whisper_model}")
-                logging.debug(f"Whisper model path: {self.whisper_model}")
-                transcriber = Transcriber(self.whisper_model)
-
-                if self._stop_flag:
-                    logging.info("Processing stopped by user")
-                    self.processing_finished.emit(False, "Processing stopped by user")
-                    return
-
-                self.status_updated.emit("Transcribing audio...")
-                self.log_updated.emit("Starting transcription...")
-                self.progress_updated.emit(10)
-
-                # Transcribe audio
-                self.log_updated.emit(f"Transcribing audio file: {self.audio_file}")
-                logging.debug(f"Audio file path: {self.audio_file}, Source language: {self.src_lang}")
-                transcription_result = transcriber.transcribe(self.audio_file, self.src_lang if self.src_lang != "auto" else None)
-                transcribed_text = transcription_result["text"]
-                detected_language = transcription_result["language"]
-
-                self.log_updated.emit(f"Transcription completed. Detected language: {detected_language}")
-                logging.debug(f"Transcribed text length: {len(transcribed_text)} characters")
-                self.progress_updated.emit(30)
-
-                if self._stop_flag:
-                    logging.info("Processing stopped by user")
-                    self.processing_finished.emit(False, "Processing stopped by user")
-                    return
-
-                self.status_updated.emit("Loading NLLB translator...")
-                self.log_updated.emit("Loading NLLB model...")
-                self.progress_updated.emit(40)
-
-                # Initialize translator
-                self.log_updated.emit(f"Initializing NLLB model: {self.nllb_model}")
-                logging.debug(f"NLLB model path: {self.nllb_model}")
-                translator = Translator(self.nllb_model)
-
-                if self._stop_flag:
-                    logging.info("Processing stopped by user")
-                    self.processing_finished.emit(False, "Processing stopped by user")
-                    return
-
-                # Create timestamped filenames for all output files
-                transcription_output_path = f"./Outputs/{sanitized_name}_transcription_{timestamp}.txt"
-
-                # Save transcription text to file first
-                self.log_updated.emit(f"Saving transcription to: {transcription_output_path}")
-                with open(transcription_output_path, 'w', encoding='utf-8') as f:
-                    f.write(transcribed_text)
-                self.log_updated.emit(f"Transcription saved to: {transcription_output_path}")
-                self.progress_updated.emit(50)
-
-                if self._stop_flag:
-                    logging.info("Processing stopped by user")
-                    self.processing_finished.emit(False, "Processing stopped by user")
-                    return
-
-                # Read the transcription from the saved file to use for translation
-                with open(transcription_output_path, 'r', encoding='utf-8') as f:
-                    raw_transcription = f.read()
-
-                # Clean up the transcription text by extracting just the spoken content
-                # The transcription file contains timestamps and text in format: [time --> time] text
-                lines = raw_transcription.split('\n')
-                text_parts = []
-                seen_words = set()  # Track seen words to avoid duplicates
-
-                for line in lines:
-                    line = line.strip()
-                    # Look for lines with timestamp format [00:00:00.000 --> 00:00:00.000] text
-                    if '-->' in line and '] ' in line:
-                        # Split on '] ' to separate timestamp from text
-                        parts = line.split('] ', 1)
-                        if len(parts) > 1:
-                            text_part = parts[1].strip()
-                            if text_part and not text_part.startswith('['):
-                                # Only add if it's actual text, not just punctuation
-                                if len(text_part) > 1 or text_part.strip() in '.!?':
-                                    # Split into individual words to check for duplicates
-                                    words = text_part.split()
-                                    unique_words = []
-                                    for word in words:
-                                        word_lower = word.lower()
-                                        if word_lower not in seen_words:
-                                            unique_words.append(word)
-                                            seen_words.add(word_lower)
-
-                                    if unique_words:
-                                        unique_text = ' '.join(unique_words)
-                                        text_parts.append(unique_text)
-
-                # Join all text parts to form a coherent paragraph
-                # The Whisper output has each word on a separate line, so we need to reconstruct sentences
-                cleaned_transcription = ' '.join(text_parts).strip()
-
-                # Remove extra spaces and clean up
-                import re
-                cleaned_transcription = re.sub(r'\s+', ' ', cleaned_transcription)
-                cleaned_transcription = cleaned_transcription.strip()
-
-                # If the cleaned text is empty, use the raw transcription as fallback
-                if not cleaned_transcription:
-                    cleaned_transcription = raw_transcription
-
-                self.log_updated.emit(f"Cleaned transcription text length: {len(cleaned_transcription)} characters")
-
-                # Determine source language for translation based on user selection
-                # If user selected "auto", use detected language; otherwise use user's selection
-                if self.src_lang == "auto":
-                    # Use detected language from transcription
-                    src_lang_for_translation = detected_language
-                else:
-                    # Use user's selected source language
-                    src_lang_for_translation = self.src_lang
-
-                # Map the source language to NLLB format
-                src_lang_for_nllb = map_language_code(src_lang_for_translation, to_nllb_format=True)
-
-                # Process each selected target language
-                output_files = []
-                output_files.append(f"Transcription saved to: {transcription_output_path}")
-
-                # Calculate progress increment per language
-                num_languages = len(self.tgt_lang_list)
-                if num_languages > 0:
-                    progress_per_language = 30 // num_languages  # Distribute 30% progress across languages
-                else:
-                    progress_per_language = 0
-
-                current_progress = 70  # Start from 70% after transcription
-
-                for i, tgt_lang in enumerate(self.tgt_lang_list):
-                    if self._stop_flag:
-                        logging.info("Processing stopped by user")
-                        self.processing_finished.emit(False, "Processing stopped by user")
-                        return
-
-                    self.status_updated.emit(f"Translating to {tgt_lang}...")
-                    self.log_updated.emit(f"Starting translation to {tgt_lang}...")
-
-                    # Convert language to numeric code and back to ensure consistency
-                    lang_num = language_code_to_number(tgt_lang)
-                    tgt_lang_for_nllb = number_to_language_code(lang_num)
-
-                    self.log_updated.emit(f"Translating from {src_lang_for_nllb} to {tgt_lang_for_nllb}")
-                    logging.debug(f"Source language: {src_lang_for_nllb}, Target language: {tgt_lang_for_nllb}")
-
-                    # Translate the cleaned text
-                    translated_text = translator.translate(cleaned_transcription, src_lang_for_nllb, tgt_lang_for_nllb)
-
-                    # Create specific output paths for this language
-                    translation_output_path = f"./Outputs/{sanitized_name}_translation_{tgt_lang}_{timestamp}.txt"
-                    audio_output_path = f"./Outputs/{sanitized_name}_dubbed_{tgt_lang}_{timestamp}.wav"
-
-                    # Save translation text to file
-                    self.log_updated.emit(f"Saving translation to: {translation_output_path}")
-                    with open(translation_output_path, 'w', encoding='utf-8') as f:
-                        f.write(translated_text)
-                    self.log_updated.emit(f"Translation saved to: {translation_output_path}")
-                    output_files.append(f"Translation to {tgt_lang} saved to: {translation_output_path}")
-
-                    self.status_updated.emit(f"Generating dubbed audio for {tgt_lang}...")
-                    self.log_updated.emit(f"Generating audio with cloned voice for {tgt_lang}...")
-
-                    # Convert language to numeric code and back to ensure consistency for XTTS
-                    lang_num = language_code_to_number(tgt_lang)
-                    tgt_lang_for_xtts = map_language_code(number_to_language_code(lang_num), to_nllb_format=False)  # Convert from NLLB to XTTS format
-
-                    # Initialize voice cloner for this language (only once if needed)
-                    if i == 0:  # Only initialize once
-                        self.log_updated.emit(f"Initializing XTTS model: {self.xtts_model}")
-                        logging.debug(f"XTTS model path: {self.xtts_model}")
-                        cloner = VoiceCloner(self.xtts_model)
-
-                    if self._stop_flag:
-                        logging.info("Processing stopped by user")
-                        self.processing_finished.emit(False, "Processing stopped by user")
-                        return
-
-                    # Generate and save dubbed audio using the saved translation file
-                    self.log_updated.emit(f"Generating dubbed audio: {audio_output_path}")
-                    logging.debug(f"Reference audio: {self.ref_audio}, Output path: {audio_output_path}, Language: {tgt_lang_for_xtts}")
-                    cloner.clone_voice(translated_text, self.ref_audio, audio_output_path, tgt_lang_for_xtts)
-
-                    self.log_updated.emit(f"Dubbed audio for {tgt_lang} saved to: {audio_output_path}")
-                    output_files.append(f"Dubbed audio for {tgt_lang} saved to: {audio_output_path}")
-
-                    # Update progress
-                    current_progress += progress_per_language
-                    self.progress_updated.emit(min(current_progress, 95))  # Cap at 95%
-
-                self.status_updated.emit("Processing completed successfully!")
-                self.progress_updated.emit(100)
-
-                # Prepare message with all output files
-                output_message = f"Processing completed successfully for {num_languages} language(s)!\n"
-                output_message += '\n'.join(output_files)
-
-                self.processing_finished.emit(True, output_message)
-                logging.info(f"Processing completed successfully for {num_languages} language(s). Output files:\n" + '\n'.join(output_files))
-                return
-
-            elif self.input_type == "transcription" and self.output_mode == "translation":
-                # Transcription text input -> Translation output (translate and dub)
-                self.status_updated.emit("Loading NLLB translator...")
-                self.log_updated.emit("Loading NLLB model...")
-                self.progress_updated.emit(20)
-
-                if self._stop_flag:
-                    logging.info("Processing stopped by user")
-                    self.processing_finished.emit(False, "Processing stopped by user")
-                    return
-
-                # Initialize translator
-                self.log_updated.emit(f"Initializing NLLB model: {self.nllb_model}")
-                logging.debug(f"NLLB model path: {self.nllb_model}")
-                translator = Translator(self.nllb_model)
-
-                if self._stop_flag:
-                    logging.info("Processing stopped by user")
-                    self.processing_finished.emit(False, "Processing stopped by user")
-                    return
-
-                # Read the transcription text from file
-                with open(self.text_file, 'r', encoding='utf-8') as f:
-                    transcription_text = f.read()
-
-                self.log_updated.emit(f"Loaded transcription text, length: {len(transcription_text)} characters")
-                self.progress_updated.emit(40)
-
-                # Process each selected target language
-                output_files = []
-
-                # Calculate progress increment per language
-                num_languages = len(self.tgt_lang_list)
-                if num_languages > 0:
-                    progress_per_language = 60 // num_languages  # Distribute 60% progress across languages
-                else:
-                    progress_per_language = 0
-
-                current_progress = 40  # Start from 40% after loading text
-
-                for i, tgt_lang in enumerate(self.tgt_lang_list):
-                    if self._stop_flag:
-                        logging.info("Processing stopped by user")
-                        self.processing_finished.emit(False, "Processing stopped by user")
-                        return
-
-                    self.status_updated.emit(f"Translating to {tgt_lang}...")
-                    self.log_updated.emit(f"Starting translation to {tgt_lang}...")
-
-                    # Convert language to numeric code and back to ensure consistency
-                    lang_num = language_code_to_number(tgt_lang)
-                    tgt_lang_for_nllb = number_to_language_code(lang_num)
-
-                    # Determine source language for translation based on user selection
-                    # If user selected "auto", we'll use a default or try to detect
-                    if self.src_lang == "auto":
-                        # For text input, we'll assume English as default or use a language detector
-                        src_lang_for_nllb = "eng_Latn"
-                    else:
-                        # Use user's selected source language
-                        src_lang_for_nllb = map_language_code(self.src_lang, to_nllb_format=True)
-
-                    self.log_updated.emit(f"Translating from {src_lang_for_nllb} to {tgt_lang_for_nllb}")
-                    logging.debug(f"Source language: {src_lang_for_nllb}, Target language: {tgt_lang_for_nllb}")
-
-                    # Translate the text
-                    translated_text = translator.translate(transcription_text, src_lang_for_nllb, tgt_lang_for_nllb)
-
-                    # Create specific output paths for this language
-                    translation_output_path = f"./Outputs/{sanitized_name}_translation_{tgt_lang}_{timestamp}.txt"
-                    audio_output_path = f"./Outputs/{sanitized_name}_dubbed_{tgt_lang}_{timestamp}.wav"
-
-                    # Save translation text to file
-                    self.log_updated.emit(f"Saving translation to: {translation_output_path}")
-                    with open(translation_output_path, 'w', encoding='utf-8') as f:
-                        f.write(translated_text)
-                    self.log_updated.emit(f"Translation saved to: {translation_output_path}")
-                    output_files.append(f"Translation to {tgt_lang} saved to: {translation_output_path}")
-
-                    self.status_updated.emit(f"Generating dubbed audio for {tgt_lang}...")
-                    self.log_updated.emit(f"Generating audio with cloned voice for {tgt_lang}...")
-
-                    # Convert language to numeric code and back to ensure consistency for XTTS
-                    lang_num = language_code_to_number(tgt_lang)
-                    tgt_lang_for_xtts = map_language_code(number_to_language_code(lang_num), to_nllb_format=False)  # Convert from NLLB to XTTS format
-
-                    # Initialize voice cloner for this language (only once if needed)
-                    if i == 0:  # Only initialize once
-                        self.log_updated.emit(f"Initializing XTTS model: {self.xtts_model}")
-                        logging.debug(f"XTTS model path: {self.xtts_model}")
-                        cloner = VoiceCloner(self.xtts_model)
-
-                    if self._stop_flag:
-                        logging.info("Processing stopped by user")
-                        self.processing_finished.emit(False, "Processing stopped by user")
-                        return
-
-                    # Generate and save dubbed audio using the translated text
-                    self.log_updated.emit(f"Generating dubbed audio: {audio_output_path}")
-                    logging.debug(f"Reference audio: {self.ref_audio}, Output path: {audio_output_path}, Language: {tgt_lang_for_xtts}")
-                    cloner.clone_voice(translated_text, self.ref_audio, audio_output_path, tgt_lang_for_xtts)
-
-                    self.log_updated.emit(f"Dubbed audio for {tgt_lang} saved to: {audio_output_path}")
-                    output_files.append(f"Dubbed audio for {tgt_lang} saved to: {audio_output_path}")
-
-                    # Update progress
-                    current_progress += progress_per_language
-                    self.progress_updated.emit(min(current_progress, 95))  # Cap at 95%
-
-                self.status_updated.emit("Processing completed successfully!")
-                self.progress_updated.emit(100)
-
-                # Prepare message with all output files
-                output_message = f"Processing completed successfully for {num_languages} language(s)!\n"
-                output_message += '\n'.join(output_files)
-
-                self.processing_finished.emit(True, output_message)
-                logging.info(f"Processing completed successfully for {num_languages} language(s). Output files:\n" + '\n'.join(output_files))
-                return
-
-            elif self.input_type == "translation" and self.output_mode == "translation":
-                # Translation text input -> Dubbed output (just dub the provided text)
-                self.status_updated.emit("Loading XTTS model...")
-                self.log_updated.emit("Loading XTTS model...")
-                self.progress_updated.emit(20)
-
-                if self._stop_flag:
-                    logging.info("Processing stopped by user")
-                    self.processing_finished.emit(False, "Processing stopped by user")
-                    return
-
-                # Initialize voice cloner
-                self.log_updated.emit(f"Initializing XTTS model: {self.xtts_model}")
-                logging.debug(f"XTTS model path: {self.xtts_model}")
-                cloner = VoiceCloner(self.xtts_model)
-
-                if self._stop_flag:
-                    logging.info("Processing stopped by user")
-                    self.processing_finished.emit(False, "Processing stopped by user")
-                    return
-
-                # Read the translation text from file
-                with open(self.text_file, 'r', encoding='utf-8') as f:
-                    translation_text = f.read()
-
-                self.log_updated.emit(f"Loaded translation text, length: {len(translation_text)} characters")
-                self.progress_updated.emit(40)
-
-                # Use the first selected target language, or default to English if none selected
-                target_lang = self.tgt_lang_list[0] if self.tgt_lang_list else "eng_Latn"
-
-                # Convert language to numeric code and back to ensure consistency for XTTS
-                lang_num = language_code_to_number(target_lang)
-                tgt_lang_for_xtts = map_language_code(number_to_language_code(lang_num), to_nllb_format=False)
-
-                # Generate audio from the translation text
-                audio_output_path = f"./Outputs/{sanitized_name}_dubbed_{target_lang}_{timestamp}.wav"
-                self.log_updated.emit(f"Generating dubbed audio: {audio_output_path}")
-                logging.debug(f"Reference audio: {self.ref_audio}, Output path: {audio_output_path}, Language: {tgt_lang_for_xtts}")
-                cloner.clone_voice(translation_text, self.ref_audio, audio_output_path, tgt_lang_for_xtts)
-
-                self.log_updated.emit(f"Dubbed audio saved to: {audio_output_path}")
-                self.status_updated.emit("Dubbing completed successfully!")
-                self.progress_updated.emit(100)
-
-                output_message = f"Dubbed audio saved to: {audio_output_path}"
-                self.processing_finished.emit(True, output_message)
-                logging.info(f"Dubbed audio saved to: {audio_output_path}")
-                return
-
-        except FileNotFoundError as e:
-            error_msg = f"File not found: {str(e)}"
-            self.log_updated.emit(error_msg)
-            self.status_updated.emit("Processing failed - file not found!")
-            logging.error(f"FileNotFoundError in ProcessingThread: {str(e)}", exc_info=True)
-            self.processing_finished.emit(False, error_msg)
-        except ValueError as e:
-            error_msg = f"Value error: {str(e)}"
-            self.log_updated.emit(error_msg)
-            self.status_updated.emit("Processing failed - invalid value!")
-            logging.error(f"ValueError in ProcessingThread: {str(e)}", exc_info=True)
-            self.processing_finished.emit(False, error_msg)
-        except RuntimeError as e:
-            error_msg = f"Runtime error: {str(e)}"
-            self.log_updated.emit(error_msg)
-            self.status_updated.emit("Processing failed - runtime error!")
-            logging.error(f"RuntimeError in ProcessingThread: {str(e)}", exc_info=True)
-            self.processing_finished.emit(False, error_msg)
-        except Exception as e:
-            error_msg = f"Unexpected error during processing: {str(e)}"
-            self.log_updated.emit(error_msg)
-            self.status_updated.emit("Processing failed!")
-            logging.error(f"Unexpected error in ProcessingThread: {str(e)}", exc_info=True)
-            self.processing_finished.emit(False, error_msg)
 
 
 def main():
