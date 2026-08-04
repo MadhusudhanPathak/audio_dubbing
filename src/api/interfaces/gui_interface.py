@@ -1,7 +1,5 @@
-import sys
 import logging
 import os
-from datetime import datetime
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QComboBox, QProgressBar, QTextEdit,
@@ -10,6 +8,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont, QPalette, QColor
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
+from src.utils.common.app_config import get_config
 from src.utils.common.helpers import (
     validate_audio_file, validate_reference_audio_duration,
     get_supported_audio_formats
@@ -27,11 +26,12 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, 900, 700)
 
         # Set up logging
+        config = get_config()
         logging.basicConfig(
             level=logging.DEBUG,  # Changed to DEBUG for more detailed logging
-            format='%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s',
+            format=config.LOG_FORMAT,
             handlers=[
-                logging.FileHandler('offline_dubbing.log'),
+                logging.FileHandler(os.path.join(config.PROJECT_ROOT, 'offline_dubbing.log')),
                 logging.StreamHandler()
             ]
         )
@@ -65,10 +65,6 @@ class MainWindow(QMainWindow):
         qr.moveCenter(cp)
         self.move(qr.topLeft())
 
-    def all_models_available(self):
-        """Legacy check for backward compatibility, now using ModelManager."""
-        return ModelManager.all_models_available()
-
     def show_model_info_dialog(self):
         """Show the model info dialog"""
         dialog = ModelInfoDialog(self)
@@ -87,19 +83,19 @@ class MainWindow(QMainWindow):
         model_group = QGroupBox("Model Selection")
         model_layout = QGridLayout()
         
-        # Transcription model selection (formerly Whisper)
-        transcription_label = QLabel("Transcription Model:")
-        transcription_label.setToolTip("Select the model for speech recognition")
-        self.whisper_combo = QComboBox()
-        self.whisper_combo.setToolTip("Choose a model for transcription")
-        self.refresh_whisper_models()
+        # Transcription model selection (MOSS-Audio)
+        transcription_label = QLabel("Transcription Model (MOSS-Audio):")
+        transcription_label.setToolTip("Select the MOSS-Audio model for speech recognition")
+        self.moss_audio_combo = QComboBox()
+        self.moss_audio_combo.setToolTip("MOSS-Audio model for transcription")
+        self.refresh_moss_audio_models()
 
         refresh_models_btn = QPushButton("Refresh Models")
         refresh_models_btn.setToolTip("Scan for newly added model files")
         refresh_models_btn.clicked.connect(self.refresh_all_models)
 
         model_layout.addWidget(transcription_label, 0, 0)
-        model_layout.addWidget(self.whisper_combo, 0, 1)
+        model_layout.addWidget(self.moss_audio_combo, 0, 1)
 
         # Translation model selection (formerly NLLB)
         translation_label = QLabel("Translation Model:")
@@ -110,14 +106,14 @@ class MainWindow(QMainWindow):
         model_layout.addWidget(translation_label, 1, 0)
         model_layout.addWidget(self.nllb_combo, 1, 1)
 
-        # Narration model selection (formerly XTTS)
-        narration_label = QLabel("Narration Model:")
-        narration_label.setToolTip("Select the model for voice synthesis")
-        self.xtts_combo = QComboBox()
-        self.xtts_combo.setToolTip("Choose a model for voice synthesis")
-        self.refresh_xtts_models()
+        # Narration model selection (MOSS-TTS)
+        narration_label = QLabel("Narration Model (MOSS-TTS):")
+        narration_label.setToolTip("Select the MOSS-TTS model for voice synthesis")
+        self.moss_tts_combo = QComboBox()
+        self.moss_tts_combo.setToolTip("MOSS-TTS model for voice synthesis")
+        self.refresh_moss_tts_models()
         model_layout.addWidget(narration_label, 2, 0)
-        model_layout.addWidget(self.xtts_combo, 2, 1)
+        model_layout.addWidget(self.moss_tts_combo, 2, 1)
         
         model_layout.addWidget(refresh_models_btn, 3, 0, 1, 2, Qt.AlignRight)
         
@@ -258,6 +254,7 @@ class MainWindow(QMainWindow):
         
         # Initialize variables
         self.audio_file_path = ""
+        self.text_file_path = ""
         self.ref_audio_path = ""
         self.processing_thread = None
     
@@ -279,74 +276,44 @@ class MainWindow(QMainWindow):
         if index >= 0:
             combo.setCurrentIndex(index)
 
-    def populate_language_checkboxes_horizontal(self):
-        """This method is deprecated - target language is now a dropdown combo"""
-        # Legacy method kept for backward compatibility but not used
-        pass
-    
     def refresh_all_models(self):
         """Refresh all model dropdowns"""
-        self.refresh_whisper_models()
+        self.refresh_moss_audio_models()
         self.refresh_nllb_models()
-        self.refresh_xtts_models()
-    
-    def refresh_whisper_models(self):
-        """Refresh Whisper model dropdown"""
-        try:
-            self.whisper_combo.clear()
-            models = ModelManager.scan_whisper_models()
-            for model in models:
-                self.whisper_combo.addItem(model["name"], model["path"])
+        self.refresh_moss_tts_models()
 
-            if self.whisper_combo.count() == 0:
-                self.whisper_combo.addItem("No models found", "")
-                logging.warning("No Whisper models found")
+    def _refresh_model_combo(self, combo, scan_func, label):
+        """Refresh a model dropdown from a ModelManager scan function."""
+        try:
+            combo.clear()
+            models = scan_func()
+            for model in models:
+                combo.addItem(model["name"], model["path"])
+
+            if combo.count() == 0:
+                combo.addItem("No models found", "")
+                logging.warning(f"No {label} models found")
             else:
-                logging.info(f"Loaded {self.whisper_combo.count()} Whisper models")
+                logging.info(f"Loaded {combo.count()} {label} model(s)")
         except Exception as e:
-            logging.error(f"Error refreshing Whisper models: {str(e)}")
-            self.whisper_combo.clear()
-            self.whisper_combo.addItem("Error loading models", "")
-            QMessageBox.critical(self, "Error", f"Failed to load Whisper models: {str(e)}")
+            logging.error(f"Error refreshing {label} models: {str(e)}")
+            combo.clear()
+            combo.addItem("Error loading models", "")
+            QMessageBox.critical(self, "Error", f"Failed to load {label} models: {str(e)}")
+
+    def refresh_moss_audio_models(self):
+        """Refresh MOSS-Audio model dropdown"""
+        self._refresh_model_combo(self.moss_audio_combo, ModelManager.scan_moss_audio_models, "MOSS-Audio")
 
     def refresh_nllb_models(self):
         """Refresh NLLB model dropdown"""
-        try:
-            self.nllb_combo.clear()
-            models = ModelManager.scan_nllb_models()
-            for model in models:
-                self.nllb_combo.addItem(model["name"], model["path"])
-            
-            if self.nllb_combo.count() == 0:
-                self.nllb_combo.addItem("No models found", "")
-                logging.warning("No NLLB models found")
-            else:
-                logging.info(f"Loaded {self.nllb_combo.count()} NLLB model(s)")
-        except Exception as e:
-            logging.error(f"Error refreshing NLLB models: {str(e)}")
-            self.nllb_combo.clear()
-            self.nllb_combo.addItem("Error loading models", "")
-            QMessageBox.critical(self, "Error", f"Failed to load NLLB models: {str(e)}")
+        self._refresh_model_combo(self.nllb_combo, ModelManager.scan_nllb_models, "NLLB")
 
-    def refresh_xtts_models(self):
-        """Refresh XTTS model dropdown"""
-        try:
-            self.xtts_combo.clear()
-            models = ModelManager.scan_xtts_models()
-            for model in models:
-                self.xtts_combo.addItem(model["name"], model["path"])
-            
-            if self.xtts_combo.count() == 0:
-                self.xtts_combo.addItem("No models found", "")
-                logging.warning("No XTTS models found")
-            else:
-                logging.info(f"Loaded {self.xtts_combo.count()} XTTS model(s)")
-        except Exception as e:
-            logging.error(f"Error refreshing XTTS models: {str(e)}")
-            self.xtts_combo.clear()
-            self.xtts_combo.addItem("Error loading models", "")
-            QMessageBox.critical(self, "Error", f"Failed to load XTTS models: {str(e)}")
-    
+    def refresh_moss_tts_models(self):
+        """Refresh MOSS-TTS model dropdown"""
+        self._refresh_model_combo(self.moss_tts_combo, ModelManager.scan_moss_tts_models, "MOSS-TTS")
+
+
     def select_audio_file(self):
         """Open file dialog to select audio file"""
         file_filter = "Audio Files (" + " ".join([f"*{ext}" for ext in get_supported_audio_formats()]) + ")"
@@ -438,9 +405,12 @@ class MainWindow(QMainWindow):
     
     def start_processing(self, output_mode="translation"):
         """Start the audio processing"""
+        if self.processing_thread is not None and self.processing_thread.isRunning():
+            return
+
         # Get input type
         input_type = self.input_type_combo.currentData()
-        
+
         # Validate inputs
         if not self.validate_inputs(input_type, output_mode):
             return
@@ -448,16 +418,20 @@ class MainWindow(QMainWindow):
         # Get selected target languages
         selected_target_languages = self.get_selected_target_languages()
 
+        # Disable mode buttons while processing
+        self.transcript_only_btn.setEnabled(False)
+        self.dubbed_translation_btn.setEnabled(False)
+
         # Start processing in a separate thread
         self.processing_thread = ProcessingThread(
             self.audio_file_path if input_type == "audio" else None,
             self.text_file_path if input_type in ["transcription", "translation"] else None,
             self.ref_audio_path,
-            self.whisper_combo.currentData(),
+            self.moss_audio_combo.currentData(),
             self.nllb_combo.currentData(),
-            self.xtts_combo.currentData(),
+            self.moss_tts_combo.currentData(),
             self.src_lang_combo.currentData(),
-            selected_target_languages,  # Pass the list of selected target languages
+            selected_target_languages,
             input_type,
             output_mode
         )
@@ -496,8 +470,8 @@ class MainWindow(QMainWindow):
             if input_type == "audio":
                 if not self.audio_file_path or not validate_audio_file(self.audio_file_path):
                     errors.append("Invalid or missing audio file")
-                
-                if not self.whisper_combo.currentData():
+
+                if not self.moss_audio_combo.currentData():
                     errors.append("Please select a Transcription model")
             else:
                 if not self.text_file_path or not os.path.exists(self.text_file_path):
@@ -507,8 +481,8 @@ class MainWindow(QMainWindow):
             if output_mode == "translation":
                 if input_type != "translation" and not ModelManager.validate_nllb_directory(self.nllb_combo.currentData()):
                     errors.append("Invalid Translation model directory")
-                
-                if not ModelManager.validate_xtts_directory(self.xtts_combo.currentData()):
+
+                if not os.path.exists(os.path.join(self.moss_tts_combo.currentData(), "config.json")):
                     errors.append("Invalid Narration model directory")
 
                 if input_type in ["audio", "transcription"] and not self.get_selected_target_languages():
@@ -521,6 +495,7 @@ class MainWindow(QMainWindow):
             return True
         except Exception as e:
             logging.error(f"Validation error: {e}")
+            QMessageBox.critical(self, "Validation Error", f"Could not validate inputs: {e}")
             return False
     
     def update_progress(self, value):
@@ -547,10 +522,6 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", message)
 
 
-from src.core.application.audio_orchestrator import AudioDubbingOrchestrator
-from src.core.data_models.audio_models import AudioProcessingConfig, ProcessingMode
-
-
 class ProcessingThread(QThread):
     """Thread for processing audio to keep UI responsive"""
     progress_updated = pyqtSignal(int)
@@ -558,16 +529,16 @@ class ProcessingThread(QThread):
     log_updated = pyqtSignal(str)
     processing_finished = pyqtSignal(bool, str)
 
-    def __init__(self, audio_file, text_file, ref_audio, whisper_model, nllb_model, xtts_model,
+    def __init__(self, audio_file, text_file, ref_audio, moss_audio_model, nllb_model, moss_tts_model,
                  src_lang, tgt_lang_list, input_type, output_mode):
         super().__init__()
         self.config = AudioProcessingConfig(
             audio_file_path=audio_file,
             text_file_path=text_file,
             ref_audio_path=ref_audio,
-            whisper_model_path=whisper_model,
+            stt_model_path=moss_audio_model,
             nllb_model_path=nllb_model,
-            xtts_model_path=xtts_model,
+            tts_model_path=moss_tts_model,
             source_language=src_lang,
             target_languages=tgt_lang_list,
             processing_mode=ProcessingMode.TRANSCRIPTION_ONLY if output_mode == "transcript" else ProcessingMode.DUBBED_TRANSLATION
@@ -590,25 +561,3 @@ class ProcessingThread(QThread):
             self.processing_finished.emit(True, "Processing completed successfully!")
         else:
             self.processing_finished.emit(False, "Processing failed or was stopped.")
-
-
-
-def main():
-    app = QApplication(sys.argv)
-
-    # Set application font
-    font = QFont("Times New Roman", 10)
-    app.setFont(font)
-
-    try:
-        window = MainWindow()
-        window.show()
-        logging.info("Application started successfully")
-        sys.exit(app.exec_())
-    except Exception as e:
-        logging.error(f"Application error: {str(e)}", exc_info=True)
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()

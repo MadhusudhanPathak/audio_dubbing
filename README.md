@@ -1,12 +1,12 @@
 # Offline Audio Dubbing
 
-A professional desktop application for offline audio translation with voice cloning using Whisper, NLLB, and XTTS-v2.
+A professional desktop application for offline audio translation with voice cloning using OpenMOSS MOSS-Audio, NLLB, and OpenMOSS MOSS-TTS.
 
 ## 🚀 Features
 
-- Transcribe audio using Whisper
+- Transcribe audio using OpenMOSS MOSS-Audio
 - Translate text using NLLB (No Language Left Behind)
-- Clone voices using XTTS-v2
+- Clone voices using OpenMOSS MOSS-TTS
 - Support for multiple languages
 - User-friendly PyQt5 interface
 - Complete offline processing (no internet required after initial setup)
@@ -64,32 +64,28 @@ If you encounter DLL errors when running the application on Windows:
 
 ## 🧰 Required Models
 
-Before using the application, you need to download the following models:
+The application detects your hardware (CUDA/VRAM/RAM) on startup and tells you exactly which model tier to download and where to place it — see the model info dialog shown on first launch, or run the app to have it create the required `Models/` subdirectories automatically. In general:
 
-### Transcription Models (Whisper)
-- **Download from:** https://huggingface.co/ggerganov/whisper.cpp
-- **Supported formats:** GGML models (.bin files) or GGUF format (.gguf files)
-- **Place in:** `Models/whisper/`
-- **Recommended models:**
-  - `ggml-tiny.bin` (~75MB, fastest but least accurate)
-  - `ggml-base.bin` (~145MB, good balance)
-  - `ggml-small.bin` (~465MB, more accurate)
-  - `ggml-medium.bin` (~1.5GB, highly accurate)
-  - `ggml-large.bin` (~2.9GB, most accurate but slower)
+### Transcription Models (OpenMOSS MOSS-Audio)
+
+- **Download from:** <https://huggingface.co/OpenMOSS-Team> (MOSS-Audio-4B-Instruct or MOSS-Audio-8B-Instruct, depending on your hardware tier)
+- **Expected:** a model directory containing `config.json` and model weights
+- **Place in:** `Models/moss-audio/`
 
 ### Translation Models (NLLB)
-- **Download from:** https://huggingface.co/facebook/nllb-200-distilled-600M or https://huggingface.co/facebook/nllb-200-3.3B
+
+- **Download from:** <https://huggingface.co/facebook/nllb-200-distilled-600M> or <https://huggingface.co/facebook/nllb-200-3.3B>
 - **Required files:** config.json, pytorch_model.bin, tokenizer.json, generation_config.json
 - **Place in:** `Models/nllb/` (either directly in the folder or in a subdirectory)
 - **Recommended models:**
   - `nllb-200-distilled-600M` (~1.2GB, good speed/accuracy)
   - `nllb-200-3.3B` (~6.6GB, highest accuracy)
 
-### Narration Models (XTTS-v2)
-- **Download from:** https://huggingface.co/coqui/XTTS-v2
-- **Required files:** config.json, model.pth, vocab.json (for newer versions)
-- **Place in:** `Models/xtts/` (either directly in the folder or in a subdirectory)
-- **Recommended:** Latest version (currently 2.0.2 or newer)
+### Narration Models (OpenMOSS MOSS-TTS)
+
+- **Download from:** <https://huggingface.co/OpenMOSS-Team> (MOSS-TTS, MOSS-TTS-Local-Transformer, MOSS-TTS-Nano, or MOSS-TTS-GGUF, depending on your hardware tier)
+- **Expected:** a model directory containing `config.json` and model weights
+- **Place in:** `Models/moss-tts/`
 
 ## 🎯 Usage
 
@@ -105,22 +101,22 @@ The application supports multiple processing workflows:
 1. **Audio Transcription Only**
    - Input: Audio file
    - Output: Transcription text file
-   - Uses Whisper for speech-to-text
+   - Uses MOSS-Audio for speech-to-text
 
 2. **Full Audio Dubbing**
    - Input: Audio file + reference voice audio
    - Output: Translated and dubbed audio files in multiple languages
-   - Uses: Whisper → NLLB → XTTS-v2 pipeline
+   - Uses: MOSS-Audio → NLLB → MOSS-TTS pipeline
 
 3. **Text Translation & Dubbing**
    - Input: Transcription text file + reference voice audio
    - Output: Translated text and dubbed audio files
-   - Uses: NLLB → XTTS-v2 pipeline
+   - Uses: NLLB → MOSS-TTS pipeline
 
 4. **Direct Voice Synthesis**
    - Input: Translation text file + reference voice audio
    - Output: Dubbed audio file
-   - Uses: XTTS-v2 only
+   - Uses: MOSS-TTS only
 
 ### Step-by-Step Guide
 
@@ -142,17 +138,15 @@ The application supports multiple processing workflows:
 offline-audio-dubbing/
 ├── main.py                              # Main application entry point
 ├── requirements.txt                     # Python dependencies
-├── agent.md                             # Agent configuration and architecture
+├── AGENTS.md                            # Agent configuration and architecture
 ├── README.md                            # This file
 ├── LICENSE                              # License information
-├── Whisper.exe                          # Whisper executable (Windows)
-├── Whisper.dll                          # Whisper dependency (Windows)
 ├── Inputs/                              # Input audio files directory
 ├── Outputs/                             # Generated output files directory
 ├── Models/                              # Model storage directory
-│   ├── whisper/                         # Whisper model files (.bin or .gguf)
+│   ├── moss-audio/                      # MOSS-Audio (STT) model files
 │   ├── nllb/                            # NLLB model directories/files
-│   └── xtts/                            # XTTS model directories/files
+│   └── moss-tts/                        # MOSS-TTS model files
 ├── src/                                 # Source code root
 │   ├── __init__.py                      # Package initialization
 │   ├── core/                            # Core application logic
@@ -165,9 +159,11 @@ offline-audio-dubbing/
 │   │   │   └── audio_models.py          # Type-safe data structures
 │   │   └── services/
 │   │       ├── __init__.py
-│   │       ├── transcription_service.py # Whisper integration
+│   │       ├── base_model_service.py    # Shared STT/TTS service lifecycle
+│   │       ├── transcription_service.py # MOSS-Audio integration
 │   │       ├── translation_service.py   # NLLB integration
-│   │       └── voice_synthesis_service.py # XTTS integration
+│   │       ├── voice_synthesis_service.py # MOSS-TTS integration
+│   │       └── model_manager.py         # Local model scanning
 │   ├── api/                             # User interface layer
 │   │   ├── __init__.py
 │   │   └── interfaces/
@@ -175,49 +171,47 @@ offline-audio-dubbing/
 │   │       ├── gui_interface.py         # Main PyQt5 GUI
 │   │       └── dialogs.py               # Dialog components
 │   └── utils/                           # Utility functions
+│       ├── model_setup_checker.py       # Hardware detection & model tier selection
 │       └── common/
 │           ├── __init__.py
 │           ├── helpers.py               # Utilities, language support, validation
 │           └── app_config.py            # Configuration constants
-├── config/                              # Configuration files
-├── docs/                                # Documentation
-├── scripts/                             # Build and utility scripts
-└── tests/                               # Test suite (future expansion)
+└── tests/                               # Manual verification scripts
 ```
 
 ## 🏗️ Architecture Overview
 
 ### Technology Stack
 - **UI Framework**: PyQt5 (cross-platform desktop interface)
-- **Speech Recognition**: Whisper (offline, supports 99+ languages)
-- **Machine Translation**: NLLB-200 (205+ languages, state-of-the-art)
-- **Voice Synthesis**: XTTS-v2 (voice cloning, multilingual)
+- **Speech Recognition**: OpenMOSS MOSS-Audio (offline, local HuggingFace model)
+- **Machine Translation**: NLLB-200 (multilingual, state-of-the-art)
+- **Voice Synthesis**: OpenMOSS MOSS-TTS (voice cloning, multilingual)
 - **Deep Learning**: PyTorch with GPU support
-- **Audio Processing**: librosa, soundfile, pydub
+- **Audio Processing**: soundfile, pydub, torchaudio
 
 ### Core Components
 
 | Component | File | Purpose | Key Features |
 |-----------|------|---------|--------------|
-| **Transcriber** | `src/core/services/transcription_service.py` | Speech-to-text | Whisper.cpp integration, language detection, timeout handling |
-| **Translator** | `src/core/services/translation_service.py` | Text translation | NLLB-200 support, quantization, 205+ languages, memory optimization |
-| **VoiceCloner** | `src/core/services/voice_synthesis_service.py` | Voice synthesis | XTTS-v2 integration, voice cloning, multilingual support |
+| **Transcriber** | `src/core/services/transcription_service.py` | Speech-to-text | MOSS-Audio integration, optional language hint, timestamp mode |
+| **Translator** | `src/core/services/translation_service.py` | Text translation | NLLB-200 support, quantization, memory optimization |
+| **VoiceSynthesizer** | `src/core/services/voice_synthesis_service.py` | Voice synthesis | MOSS-TTS integration, voice cloning, multilingual support |
 | **AudioOrchestrator** | `src/core/application/audio_orchestrator.py` | Workflow management | Pipeline coordination, error handling, results aggregation |
 | **MainWindow** | `src/api/interfaces/gui_interface.py` | User interface | PyQt5 GUI, model selection, real-time progress, logging |
 | **Dialogs** | `src/api/interfaces/dialogs.py` | Dialog windows | Model info, status dialogs, check model availability |
-| **Helpers** | `src/utils/common/helpers.py` | Utilities | 205 languages mapping, audio validation, file operations |
+| **Helpers** | `src/utils/common/helpers.py` | Utilities | Language mapping, audio validation, file operations |
 | **Configuration** | `src/utils/common/app_config.py` | Settings | Paths, formats, timeouts, logging configuration |
-| **Data Models** | `src/core/data_models/audio_models.py` | Type safety | Dataclasses for configs, results, type hints |
+| **Data Models** | `src/core/data_models/audio_models.py` | Type safety | Dataclasses for configs, type hints |
 
 ### Processing Pipeline
 
 ```
 Audio Input
-    ↓ (Whisper)
+    ↓ (MOSS-Audio)
 Text Transcription
     ↓ (NLLB)
 Translated Text
-    ↓ (XTTS-v2)
+    ↓ (MOSS-TTS)
 Dubbed Audio Output
 ```
 
@@ -225,10 +219,12 @@ Dubbed Audio Output
 
 All configuration is centralized in `src/utils/common/app_config.py`:
 
-- **Model Paths**: Whisper, NLLB, XTTS directory locations
+- **Model Paths**: MOSS-Audio, NLLB, MOSS-TTS directory locations
 - **Audio Settings**: Supported formats, min/max reference audio duration
-- **Processing**: Transcription timeout, default device (CPU/CUDA)
+- **Processing**: Transcription timeout
 - **Logging**: Log level, format, output files
+
+Hardware detection (CPU/CUDA, VRAM tier, and which MOSS-Audio/MOSS-TTS variant to use) is handled separately at startup by `src/utils/model_setup_checker.py`.
 
 ## 🚀 Advanced Usage
 
@@ -251,9 +247,6 @@ Process multiple files by running the application multiple times or implementing
 
 ### Common Issues
 
-**Issue**: "Whisper.exe not found"
-- **Solution**: Download from https://github.com/ggerganov/whisper.cpp/releases and place in project root
-
 **Issue**: "CUDA out of memory"
 - **Solutions**:
   - Use 8-bit quantization: `use_quantization=True`
@@ -273,7 +266,7 @@ Process multiple files by running the application multiple times or implementing
 ## 📊 Performance Tips
 
 1. **Model Selection**:
-   - Use smaller Whisper models for speed (ggml-tiny, ggml-base)
+   - Use the 4B MOSS-Audio/MOSS-TTS tier for speed on smaller GPUs
    - Use NLLB-200-distilled-600M for speed, 3.3B for accuracy
 
 2. **Audio Setup**:

@@ -12,12 +12,20 @@ project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
 from PyQt5.QtWidgets import QApplication
-from src.api.interfaces.gui_interface import MainWindow
 import logging
+
+# Hook setup checker before importing GUI
+from src.utils.model_setup_checker import run_setup_check
 
 
 def main():
     """Main entry point for the application."""
+    models_ready, tier = run_setup_check(show_gui_dialog=True)
+    if not models_ready:
+        sys.exit(0)
+
+    from src.api.interfaces.gui_interface import MainWindow
+
     app = QApplication(sys.argv)
 
     # Set application font

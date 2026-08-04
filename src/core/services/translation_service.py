@@ -1,7 +1,7 @@
 import torch
 import logging
 import os
-from typing import Optional, Dict, List
+from typing import Optional
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, BitsAndBytesConfig
 
 
@@ -53,10 +53,13 @@ class Translator:
             Translated text
         """
         if not text.strip(): return ""
-        
+
         try:
+            if src_lang and hasattr(self.tokenizer, "src_lang"):
+                self.tokenizer.src_lang = src_lang
+
             inputs = self.tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512).to(self.device)
-            
+
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
@@ -68,3 +71,15 @@ class Translator:
             return self.tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
         except Exception as e:
             raise TranslationError(f"Translation failed: {str(e)}")
+
+    def unload(self) -> None:
+        """Free GPU memory after use. Safe to call more than once."""
+        if getattr(self, "model", None) is not None:
+            del self.model
+            self.model = None
+        if getattr(self, "tokenizer", None) is not None:
+            del self.tokenizer
+            self.tokenizer = None
+        if self.device.type == "cuda":
+            torch.cuda.empty_cache()
+        logging.info("Translator unloaded.")
